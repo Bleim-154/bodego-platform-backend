@@ -1,6 +1,7 @@
 package com.bodego.platform.strategicoffers.application.internal.commandservices;
 
-import com.bodego.platform.catalog.interfaces.acl.resources.*;
+import com.bodego.platform.catalog.interfaces.acl.resources.ProductInventorySnapshot;
+import com.bodego.platform.inventory.interfaces.acl.resources.LotInventorySnapshot;
 import com.bodego.platform.monitoring.domain.model.commands.RecordAuditLogCommand;
 import com.bodego.platform.monitoring.domain.services.AuditLogCommandService;
 import com.bodego.platform.monitoring.interfaces.acl.MonitoringContextFacade;
@@ -37,7 +38,7 @@ class RecommendationCommandServiceTests {
     final List<ProductInventorySnapshot> products = new ArrayList<>();
     final Map<Long, List<LotInventorySnapshot>> lots = new HashMap<>();
     final Instant now = Instant.parse("2026-11-10T23:59:59Z");
-    final ExternalCatalogService catalog = new ExternalCatalogService(null) {
+    final ExternalCatalogService catalog = new ExternalCatalogService(null, null) {
         public List<ProductInventorySnapshot> getProductsByBusinessId(
                 Long businessId
         ) {

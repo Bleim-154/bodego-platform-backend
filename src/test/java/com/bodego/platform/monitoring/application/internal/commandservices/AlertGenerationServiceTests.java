@@ -1,14 +1,15 @@
 package com.bodego.platform.monitoring.application.internal.commandservices;
 
-import com.bodego.platform.catalog.domain.model.aggregates.Lot;
+import com.bodego.platform.inventory.domain.model.aggregates.Lot;
 import com.bodego.platform.catalog.domain.model.aggregates.Product;
-import com.bodego.platform.catalog.domain.model.queries.GetLotsByProductIdQuery;
+import com.bodego.platform.inventory.domain.model.queries.GetLotsByProductIdQuery;
 import com.bodego.platform.catalog.domain.model.queries.GetProductByIdQuery;
 import com.bodego.platform.catalog.domain.model.queries.GetProductsByBusinessIdQuery;
-import com.bodego.platform.catalog.domain.services.LotCommandService;
-import com.bodego.platform.catalog.domain.services.LotQueryService;
+import com.bodego.platform.inventory.domain.services.LotCommandService;
+import com.bodego.platform.inventory.domain.services.LotQueryService;
 import com.bodego.platform.catalog.domain.services.ProductQueryService;
 import com.bodego.platform.catalog.interfaces.acl.CatalogContextFacade;
+import com.bodego.platform.inventory.interfaces.acl.InventoryContextFacade;
 import com.bodego.platform.monitoring.application.internal.outboundservices.acl.ExternalCatalogService;
 import com.bodego.platform.monitoring.domain.model.aggregates.Alert;
 import com.bodego.platform.monitoring.domain.model.commands.GenerateAlertsCommand;
@@ -46,11 +47,12 @@ class AlertGenerationServiceTests {
     private final LotCommandService lotCommands = proxy(LotCommandService.class);
     private final EntityManager entityManager = proxy(EntityManager.class);
     private final Query lockQuery = proxy(Query.class);
-    private final CatalogContextFacade facade = new CatalogContextFacade(lotCommands, lots, products);
+    private final CatalogContextFacade catalogFacade = new CatalogContextFacade(products);
+    private final InventoryContextFacade inventoryFacade = new InventoryContextFacade(lotCommands, lots, catalogFacade);
     private final List<Alert> saved = new ArrayList<>();
     private final LocalDate today = LocalDate.of(2026, 11, 10);
     private final AlertGenerationServiceImpl service = new AlertGenerationServiceImpl(
-            repository, new ExternalCatalogService(facade), new AlertGenerationLock(entityManager),
+            repository, new ExternalCatalogService(catalogFacade, inventoryFacade), new AlertGenerationLock(entityManager),
             Clock.fixed(Instant.parse("2026-11-10T23:59:00Z"), ZoneOffset.UTC));
 
     private static <T> T proxy(Class<T> type) {
@@ -192,9 +194,9 @@ class AlertGenerationServiceTests {
     @Test
     void snapshotQueriesValidateMissingProductAndCrossBusinessReferences() {
         when(products.handle(new GetProductByIdQuery(2L))).thenReturn(Optional.empty());
-        assertThrows(IllegalArgumentException.class, () -> facade.getLotsByProductId(1L, 2L));
+        assertThrows(IllegalArgumentException.class, () -> inventoryFacade.getLotsByProductId(1L, 2L));
         product(9L, 5);
-        assertThrows(IllegalArgumentException.class, () -> facade.getLotsByProductId(1L, 2L));
+        assertThrows(IllegalArgumentException.class, () -> inventoryFacade.getLotsByProductId(1L, 2L));
         verifyNoInteractions(lots, lotCommands);
     }
 
@@ -203,8 +205,8 @@ class AlertGenerationServiceTests {
         assertThrows(IllegalArgumentException.class, () -> new GenerateAlertsCommand(null));
         assertThrows(IllegalArgumentException.class, () -> new GenerateAlertsCommand(0L));
         assertThrows(IllegalArgumentException.class, () -> service.handle(null));
-        assertThrows(IllegalArgumentException.class, () -> facade.getProductsByBusinessId(0L));
-        assertThrows(IllegalArgumentException.class, () -> facade.getLotsByProductId(1L, -1L));
+        assertThrows(IllegalArgumentException.class, () -> catalogFacade.getProductsByBusinessId(0L));
+        assertThrows(IllegalArgumentException.class, () -> inventoryFacade.getLotsByProductId(1L, -1L));
         assertThrows(IllegalArgumentException.class, () -> new AlertGenerationLock(entityManager).acquire(0L));
         verifyNoInteractions(entityManager, products, lots, repository);
     }
@@ -219,12 +221,12 @@ class AlertGenerationServiceTests {
     }
 
     @Test
-    void componentScanKeepsOperationsAndMonitoringCatalogAdaptersDistinct() {
+    void componentScanKeepsInventoryAndMonitoringCatalogAdaptersDistinct() {
         var factory = new DefaultListableBeanFactory();
         factory.setAllowBeanDefinitionOverriding(false);
         var scanner = new ClassPathBeanDefinitionScanner(factory);
         assertDoesNotThrow(() -> scanner.scan("com.bodego.platform"));
-        assertTrue(factory.containsBeanDefinition("externalCatalogService"));
+        assertTrue(factory.containsBeanDefinition("externalInventoryService"));
         assertTrue(factory.containsBeanDefinition("monitoringExternalCatalogService"));
     }
 }

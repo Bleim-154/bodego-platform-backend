@@ -5,6 +5,9 @@ import com.bodego.platform.catalog.domain.model.queries.*;
 import com.bodego.platform.catalog.domain.services.*;
 import com.bodego.platform.catalog.interfaces.acl.CatalogContextFacade;
 import com.bodego.platform.catalog.interfaces.acl.resources.ProductInventorySnapshot;
+import com.bodego.platform.inventory.domain.services.LotCommandService;
+import com.bodego.platform.inventory.domain.services.LotQueryService;
+import com.bodego.platform.inventory.interfaces.acl.InventoryContextFacade;
 import com.bodego.platform.strategicoffers.application.internal.outboundservices.acl.ExternalCatalogService;
 import com.bodego.platform.strategicoffers.application.internal.queryservices.*;
 import com.bodego.platform.strategicoffers.domain.model.queries.*;
@@ -29,8 +32,10 @@ class StrategicOffersAclAndQueryTests {
     }
 
     final ProductQueryService products = proxy(ProductQueryService.class);
-    final CatalogContextFacade facade = new CatalogContextFacade(proxy(LotCommandService.class), proxy(LotQueryService.class), products);
-    final ExternalCatalogService catalog = new ExternalCatalogService(facade);
+    final CatalogContextFacade facade = new CatalogContextFacade(products);
+    final InventoryContextFacade inventoryFacade = new InventoryContextFacade(
+            proxy(LotCommandService.class), proxy(LotQueryService.class), facade);
+    final ExternalCatalogService catalog = new ExternalCatalogService(facade, inventoryFacade);
     final Product product = new Product(1L, 2L, "Milk", null, BigDecimal.TEN, 10);
 
     @Test

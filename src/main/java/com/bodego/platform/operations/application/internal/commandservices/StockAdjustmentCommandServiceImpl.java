@@ -1,6 +1,6 @@
 package com.bodego.platform.operations.application.internal.commandservices;
 
-import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalCatalogService;
+import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalInventoryService;
 import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalMonitoringService;
 import com.bodego.platform.operations.domain.model.aggregates.StockAdjustment;
 import com.bodego.platform.operations.domain.model.commands.ApplyStockAdjustmentCommand;
@@ -21,14 +21,14 @@ public class StockAdjustmentCommandServiceImpl
     private final StockAdjustmentRepository adjustmentRepository;
     private final PhysicalCountRepository physicalCountRepository;
     private final InventoryMovementCommandService movementCommandService;
-    private final ExternalCatalogService externalCatalogService;
+    private final ExternalInventoryService externalCatalogService;
     private final ExternalMonitoringService externalMonitoringService;
 
     public StockAdjustmentCommandServiceImpl(
             StockAdjustmentRepository adjustmentRepository,
             PhysicalCountRepository physicalCountRepository,
             InventoryMovementCommandService movementCommandService,
-            ExternalCatalogService externalCatalogService,
+            ExternalInventoryService externalCatalogService,
             ExternalMonitoringService externalMonitoringService) {
 
         this.adjustmentRepository = adjustmentRepository;

@@ -25,7 +25,7 @@ class OfferCommandServiceTests {
     final ExternalMonitoringService monitoring = new ExternalMonitoringService(new MonitoringContextFacade(audit));
     final OfferRepository repository = mock(OfferRepository.class, withSettings().mockMaker(MockMakers.PROXY));
     boolean productActive = true;
-    final ExternalCatalogService catalog = new ExternalCatalogService(null) {
+    final ExternalCatalogService catalog = new ExternalCatalogService(null, null) {
         public void validateActiveProduct(
                 Long businessId,
                 Long productId

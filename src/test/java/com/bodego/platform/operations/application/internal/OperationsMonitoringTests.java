@@ -1,18 +1,19 @@
 package com.bodego.platform.operations.application.internal;
 
-import com.bodego.platform.catalog.domain.model.aggregates.Lot;
-import com.bodego.platform.catalog.domain.model.commands.DecreaseLotQuantityCommand;
-import com.bodego.platform.catalog.domain.model.commands.IncreaseLotQuantityCommand;
-import com.bodego.platform.catalog.domain.model.queries.GetLotByIdQuery;
-import com.bodego.platform.catalog.domain.services.LotCommandService;
-import com.bodego.platform.catalog.domain.services.LotQueryService;
+import com.bodego.platform.inventory.domain.model.aggregates.Lot;
+import com.bodego.platform.inventory.domain.model.commands.DecreaseLotQuantityCommand;
+import com.bodego.platform.inventory.domain.model.commands.IncreaseLotQuantityCommand;
+import com.bodego.platform.inventory.domain.model.queries.GetLotByIdQuery;
+import com.bodego.platform.inventory.domain.services.LotCommandService;
+import com.bodego.platform.inventory.domain.services.LotQueryService;
 import com.bodego.platform.catalog.domain.services.ProductQueryService;
 import com.bodego.platform.catalog.interfaces.acl.CatalogContextFacade;
+import com.bodego.platform.inventory.interfaces.acl.InventoryContextFacade;
 import com.bodego.platform.monitoring.domain.model.commands.RecordAuditLogCommand;
 import com.bodego.platform.monitoring.domain.services.AuditLogCommandService;
 import com.bodego.platform.monitoring.interfaces.acl.MonitoringContextFacade;
 import com.bodego.platform.operations.application.internal.commandservices.*;
-import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalCatalogService;
+import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalInventoryService;
 import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalMonitoringService;
 import com.bodego.platform.operations.domain.model.aggregates.*;
 import com.bodego.platform.operations.domain.model.commands.*;
@@ -42,8 +43,9 @@ class OperationsMonitoringTests {
     private final AuditLogCommandService auditCommands = proxy(AuditLogCommandService.class);
     private final ExternalMonitoringService monitoring =
             new ExternalMonitoringService(new MonitoringContextFacade(auditCommands));
-    private final ExternalCatalogService catalog = new ExternalCatalogService(
-            new CatalogContextFacade(lotCommands, lots, proxy(ProductQueryService.class)));
+    private final CatalogContextFacade catalogFacade = new CatalogContextFacade(proxy(ProductQueryService.class));
+    private final InventoryContextFacade inventoryFacade = new InventoryContextFacade(lotCommands, lots, catalogFacade);
+    private final ExternalInventoryService catalog = new ExternalInventoryService(inventoryFacade);
     private final InventoryMovementCommandServiceImpl movementService =
             new InventoryMovementCommandServiceImpl(movements, catalog, monitoring);
     private final PhysicalCountCommandServiceImpl countService =

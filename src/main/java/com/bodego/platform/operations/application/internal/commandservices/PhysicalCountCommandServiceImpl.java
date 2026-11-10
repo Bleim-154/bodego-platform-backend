@@ -1,6 +1,6 @@
 package com.bodego.platform.operations.application.internal.commandservices;
 
-import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalCatalogService;
+import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalInventoryService;
 import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalMonitoringService;
 import com.bodego.platform.operations.domain.model.aggregates.PhysicalCount;
 import com.bodego.platform.operations.domain.model.commands.CreatePhysicalCountCommand;
@@ -14,12 +14,12 @@ public class PhysicalCountCommandServiceImpl
         implements PhysicalCountCommandService {
 
     private final PhysicalCountRepository physicalCountRepository;
-    private final ExternalCatalogService externalCatalogService;
+    private final ExternalInventoryService externalCatalogService;
     private final ExternalMonitoringService externalMonitoringService;
 
     public PhysicalCountCommandServiceImpl(
             PhysicalCountRepository physicalCountRepository,
-            ExternalCatalogService externalCatalogService,
+            ExternalInventoryService externalCatalogService,
             ExternalMonitoringService externalMonitoringService) {
         this.physicalCountRepository = physicalCountRepository;
         this.externalCatalogService = externalCatalogService;
