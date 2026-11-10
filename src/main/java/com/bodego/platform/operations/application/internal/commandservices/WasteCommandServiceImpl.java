@@ -1,0 +1,60 @@
+package com.bodego.platform.operations.application.internal.commandservices;
+
+import com.bodego.platform.operations.domain.model.aggregates.Waste;
+import com.bodego.platform.operations.domain.model.commands.CreateInventoryMovementCommand;
+import com.bodego.platform.operations.domain.model.commands.RegisterWasteCommand;
+import com.bodego.platform.operations.domain.model.valueobjects.MovementType;
+import com.bodego.platform.operations.domain.services.InventoryMovementCommandService;
+import com.bodego.platform.operations.domain.services.WasteCommandService;
+import com.bodego.platform.operations.infrastructure.persistence.jpa.repositories.WasteRepository;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class WasteCommandServiceImpl implements WasteCommandService {
+
+    private final WasteRepository wasteRepository;
+    private final InventoryMovementCommandService movementCommandService;
+
+    public WasteCommandServiceImpl(
+            WasteRepository wasteRepository,
+            InventoryMovementCommandService movementCommandService) {
+        this.wasteRepository = wasteRepository;
+        this.movementCommandService = movementCommandService;
+    }
+
+    @Override
+    @Transactional
+    public Long handle(RegisterWasteCommand command) {
+
+        if (command == null) {
+            throw new IllegalArgumentException(
+                    "Waste command is required");
+        }
+
+        var waste = new Waste(
+                command.businessId(),
+                command.lotId(),
+                command.quantity(),
+                command.reason(),
+                command.observation()
+        );
+
+        String movementReason = "WASTE: " + waste.getReason().name();
+
+        movementCommandService.handle(
+                new CreateInventoryMovementCommand(
+                        waste.getBusinessId(),
+                        waste.getLotId(),
+                        MovementType.EXIT,
+                        waste.getQuantity(),
+                        movementReason
+                )
+        );
+
+        var savedWaste = wasteRepository.save(waste);
+
+        return savedWaste.getId();
+    }
+}
