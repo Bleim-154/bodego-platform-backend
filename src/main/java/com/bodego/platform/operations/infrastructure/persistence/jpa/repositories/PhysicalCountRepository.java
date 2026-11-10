@@ -1,4 +1,4 @@
-package com.bodego.platform.operations.domain.infrastructure.persistence.jpa.repositories;
+package com.bodego.platform.operations.infrastructure.persistence.jpa.repositories;
 
 import com.bodego.platform.operations.domain.model.aggregates.PhysicalCount;
 import org.springframework.stereotype.Repository;
