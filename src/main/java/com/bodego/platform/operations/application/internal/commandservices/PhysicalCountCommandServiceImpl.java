@@ -1,6 +1,7 @@
 package com.bodego.platform.operations.application.internal.commandservices;
 
 import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalCatalogService;
+import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalMonitoringService;
 import com.bodego.platform.operations.domain.model.aggregates.PhysicalCount;
 import com.bodego.platform.operations.domain.model.commands.CreatePhysicalCountCommand;
 import com.bodego.platform.operations.domain.services.PhysicalCountCommandService;
@@ -14,12 +15,15 @@ public class PhysicalCountCommandServiceImpl
 
     private final PhysicalCountRepository physicalCountRepository;
     private final ExternalCatalogService externalCatalogService;
+    private final ExternalMonitoringService externalMonitoringService;
 
     public PhysicalCountCommandServiceImpl(
             PhysicalCountRepository physicalCountRepository,
-            ExternalCatalogService externalCatalogService) {
+            ExternalCatalogService externalCatalogService,
+            ExternalMonitoringService externalMonitoringService) {
         this.physicalCountRepository = physicalCountRepository;
         this.externalCatalogService = externalCatalogService;
+        this.externalMonitoringService = externalMonitoringService;
     }
 
     @Override
@@ -53,6 +57,13 @@ public class PhysicalCountCommandServiceImpl
 
         var savedPhysicalCount =
                 physicalCountRepository.save(physicalCount);
+
+        externalMonitoringService.recordAction(
+                savedPhysicalCount.getBusinessId(), "PHYSICAL_COUNT_CREATED",
+                "PhysicalCount", savedPhysicalCount.getId(),
+                "Physical count for lot " + savedPhysicalCount.getLotId()
+                        + ": counted " + savedPhysicalCount.getCountedQuantity()
+                        + ", difference " + savedPhysicalCount.getDifference());
 
         return savedPhysicalCount.getId();
     }

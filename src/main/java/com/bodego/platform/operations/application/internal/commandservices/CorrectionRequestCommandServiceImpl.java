@@ -1,5 +1,6 @@
 package com.bodego.platform.operations.application.internal.commandservices;
 
+import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalMonitoringService;
 import com.bodego.platform.operations.domain.model.aggregates.CorrectionRequest;
 import com.bodego.platform.operations.domain.model.commands.ApplyStockAdjustmentCommand;
 import com.bodego.platform.operations.domain.model.commands.CreateCorrectionRequestCommand;
@@ -22,17 +23,20 @@ public class CorrectionRequestCommandServiceImpl
     private final PhysicalCountRepository countRepository;
     private final StockAdjustmentRepository adjustmentRepository;
     private final StockAdjustmentCommandService adjustmentCommandService;
+    private final ExternalMonitoringService externalMonitoringService;
 
     public CorrectionRequestCommandServiceImpl(
             CorrectionRequestRepository requestRepository,
             PhysicalCountRepository countRepository,
             StockAdjustmentRepository adjustmentRepository,
-            StockAdjustmentCommandService adjustmentCommandService
+            StockAdjustmentCommandService adjustmentCommandService,
+            ExternalMonitoringService externalMonitoringService
     ) {
         this.requestRepository = requestRepository;
         this.countRepository = countRepository;
         this.adjustmentRepository = adjustmentRepository;
         this.adjustmentCommandService = adjustmentCommandService;
+        this.externalMonitoringService = externalMonitoringService;
     }
 
     @Override
@@ -79,7 +83,14 @@ public class CorrectionRequestCommandServiceImpl
                     "A pending correction request already exists");
         }
 
-        return requestRepository.save(request).getId();
+        var savedRequest = requestRepository.save(request);
+
+        externalMonitoringService.recordAction(
+                savedRequest.getBusinessId(), "CORRECTION_REQUEST_CREATED",
+                "CorrectionRequest", savedRequest.getId(),
+                "Correction requested for physical count " + savedRequest.getPhysicalCountId());
+
+        return savedRequest.getId();
     }
 
     @Override
@@ -136,6 +147,16 @@ public class CorrectionRequestCommandServiceImpl
             request.reject(command.reviewComment());
         }
 
-        return requestRepository.save(request).getId();
+        var savedRequest = requestRepository.save(request);
+
+        externalMonitoringService.recordAction(
+                savedRequest.getBusinessId(),
+                savedRequest.getStatus() == CorrectionRequestStatus.APPROVED
+                        ? "CORRECTION_REQUEST_APPROVED" : "CORRECTION_REQUEST_REJECTED",
+                "CorrectionRequest", savedRequest.getId(),
+                "Correction request " + savedRequest.getStatus()
+                        + " for physical count " + savedRequest.getPhysicalCountId());
+
+        return savedRequest.getId();
     }
 }

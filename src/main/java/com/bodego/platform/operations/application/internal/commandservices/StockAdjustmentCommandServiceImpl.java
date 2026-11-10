@@ -1,6 +1,7 @@
 package com.bodego.platform.operations.application.internal.commandservices;
 
 import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalCatalogService;
+import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalMonitoringService;
 import com.bodego.platform.operations.domain.model.aggregates.StockAdjustment;
 import com.bodego.platform.operations.domain.model.commands.ApplyStockAdjustmentCommand;
 import com.bodego.platform.operations.domain.model.commands.CreateInventoryMovementCommand;
@@ -21,17 +22,20 @@ public class StockAdjustmentCommandServiceImpl
     private final PhysicalCountRepository physicalCountRepository;
     private final InventoryMovementCommandService movementCommandService;
     private final ExternalCatalogService externalCatalogService;
+    private final ExternalMonitoringService externalMonitoringService;
 
     public StockAdjustmentCommandServiceImpl(
             StockAdjustmentRepository adjustmentRepository,
             PhysicalCountRepository physicalCountRepository,
             InventoryMovementCommandService movementCommandService,
-            ExternalCatalogService externalCatalogService) {
+            ExternalCatalogService externalCatalogService,
+            ExternalMonitoringService externalMonitoringService) {
 
         this.adjustmentRepository = adjustmentRepository;
         this.physicalCountRepository = physicalCountRepository;
         this.movementCommandService = movementCommandService;
         this.externalCatalogService = externalCatalogService;
+        this.externalMonitoringService = externalMonitoringService;
     }
 
     @Override
@@ -108,6 +112,13 @@ public class StockAdjustmentCommandServiceImpl
                 adjustmentRepository.save(adjustment);
 
         adjustmentRepository.flush();
+
+        externalMonitoringService.recordAction(
+                savedAdjustment.getBusinessId(), "STOCK_ADJUSTMENT_APPLIED",
+                "StockAdjustment", savedAdjustment.getId(),
+                "Stock adjustment for physical count " + savedAdjustment.getPhysicalCountId()
+                        + ": " + savedAdjustment.getPreviousQuantity()
+                        + " to " + savedAdjustment.getNewQuantity());
 
         return savedAdjustment.getId();
     }

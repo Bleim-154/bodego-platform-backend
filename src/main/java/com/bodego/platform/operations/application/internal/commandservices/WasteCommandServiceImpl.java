@@ -1,5 +1,6 @@
 package com.bodego.platform.operations.application.internal.commandservices;
 
+import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalMonitoringService;
 import com.bodego.platform.operations.domain.model.aggregates.Waste;
 import com.bodego.platform.operations.domain.model.commands.CreateInventoryMovementCommand;
 import com.bodego.platform.operations.domain.model.commands.RegisterWasteCommand;
@@ -16,12 +17,15 @@ public class WasteCommandServiceImpl implements WasteCommandService {
 
     private final WasteRepository wasteRepository;
     private final InventoryMovementCommandService movementCommandService;
+    private final ExternalMonitoringService externalMonitoringService;
 
     public WasteCommandServiceImpl(
             WasteRepository wasteRepository,
-            InventoryMovementCommandService movementCommandService) {
+            InventoryMovementCommandService movementCommandService,
+            ExternalMonitoringService externalMonitoringService) {
         this.wasteRepository = wasteRepository;
         this.movementCommandService = movementCommandService;
+        this.externalMonitoringService = externalMonitoringService;
     }
 
     @Override
@@ -54,6 +58,12 @@ public class WasteCommandServiceImpl implements WasteCommandService {
         );
 
         var savedWaste = wasteRepository.save(waste);
+
+        externalMonitoringService.recordAction(
+                savedWaste.getBusinessId(), "WASTE_REGISTERED",
+                "Waste", savedWaste.getId(),
+                "Waste of " + savedWaste.getQuantity() + " units for lot "
+                        + savedWaste.getLotId() + ": " + savedWaste.getReason());
 
         return savedWaste.getId();
     }
