@@ -1,13 +1,13 @@
 # BodeGo Backend — Contexto maestro de continuidad
 
-**Versión documental:** 1.1  
+**Versión documental:** 1.2.1  
 **Actualización:** 2026-11-10  
-**Fuentes:** reportes de Configuración y Shared, Catálogo e Inventario y Operations (corte 2026-11-10), aportados por los chats de desarrollo.  
-**Alcance de evidencia:** avances comunicados y pruebas manuales confirmadas por el usuario; **no se inspeccionó el repositorio backend ni se ejecutó su código** para elaborar esta versión.
+**Fuentes:** reportes de Configuración y Shared, Catálogo e Inventario, Operations y seis reportes de Monitoring (Etapas 1–5 y consolidado, corte 2026-11-10).  
+**Alcance de evidencia:** consolidación documental de los reportes aportados. Las verificaciones de compilación, pruebas y HTTP de Monitoring fueron reportadas por su chat de implementación; **no se inspeccionó ni ejecutó aquí el repositorio backend**. El reporte original de Monitoring no tuvo conexión PostgreSQL; posteriormente el usuario confirmó verificaciones manuales funcionales y existencia de tablas. No se recibieron logs SQL ni pruebas automatizadas de transacciones.
 
 ## 1. Estado ejecutivo
 
-BodeGo es una plataforma de inventarios para bodegas y minimarkets. El backend es un monolito modular Spring Boot con DDD por Bounded Context y CQRS ligero. La infraestructura y el paquete `shared` están configurados. En `catalog` se han implementado y probado manualmente **Category, Product y Lot**. En `operations` se implementaron y probaron manualmente **InventoryMovement, PhysicalCount, StockAdjustment, Waste y CorrectionRequest**. Las modificaciones de stock de Operations se canalizan mediante una ACL hacia Catalog y se realizan en transacciones. **Siguiente Bounded Context: Monitoring (Alert y AuditLog)**. Las pruebas automatizadas de integración y concurrencia siguen pendientes.
+BodeGo es una plataforma de inventarios para bodegas y minimarkets. El backend es un monolito modular Spring Boot con DDD por Bounded Context y CQRS ligero. `shared` está configurado; `catalog` implementa Category, Product y Lot; `operations` implementa InventoryMovement, PhysicalCount, StockAdjustment, Waste y CorrectionRequest; y **`monitoring` implementa Alert y AuditLog, generación de alertas y auditoría integrada con Operations**. Catalog y Operations tienen pruebas manuales reportadas. Monitoring compiló y pasó 56 pruebas, además de verificación HTTP/Swagger sin operaciones de datos. **El usuario confirmó posteriormente persistencia y operaciones funcionales con PostgreSQL; las pruebas avanzadas de concurrencia, rollback y atomicidad siguen pendientes**. Próximos contextos: Strategic Offers e IAM.
 
 | Área | Estado según reportes |
 |---|---|
@@ -17,16 +17,17 @@ BodeGo es una plataforma de inventarios para bodegas y minimarkets. El backend e
 | Catalog: Product | Creación, lectura, edición y activación/desactivación probados |
 | Catalog: Lot | Creación, consulta y edición probadas; comandos internos de cantidad sin REST |
 | Operations: InventoryMovement, PhysicalCount, StockAdjustment, Waste, CorrectionRequest | Implementados; flujos REST probados manualmente |
+| Monitoring: Alert y AuditLog | Implementados; 56 pruebas exitosas y comprobaciones funcionales manuales con PostgreSQL confirmadas por el usuario; concurrencia/rollback pendientes |
 | IAM y seguridad | Pendiente |
 | Ofertas Estratégicas | Pendiente |
-| Auditoría y Seguimiento | Pendiente |
+| Integración Operations → Monitoring | Implementada con fachada transaccional y 12 pruebas específicas; rollback de filas no verificado |
 | Integración real con Angular | No acreditada por estos reportes |
-| Pruebas automatizadas | Una prueba Maven exitosa (1 ejecutada); suite de integración de Operations pendiente |
+| Pruebas automatizadas | Operations: una prueba Maven previa; Monitoring: suite posterior de 56 pruebas exitosas (1 contextLoads, 43 Monitoring, 12 Operations/Monitoring); sin pruebas PostgreSQL reales |
 
 ## 2. Stack y configuración vigente
 
-- **Java:** JDK 25, confirmado en el chat de Shared.
-- **Spring Boot:** familia 4.0.x; versión exacta pendiente de comprobar en `pom.xml`.
+- **Java:** `release 25` configurado; el chat de Monitoring compiló con JDK 27 local. Ejecución con JDK 25 exacto no verificada en ese entorno.
+- **Spring Boot:** 4.0.9 según `pom.xml` inspeccionado en el chat de Monitoring; no revalidado aquí.
 - **Maven:** wrapper `mvnw.cmd`; **Spring Data JPA / Hibernate**, **Spring Web MVC**, **Jakarta Validation**, **Lombok**, **PostgreSQL Driver** y **DevTools**.
 - **springdoc-openapi-starter-webmvc-ui:** 3.0.2 (según Shared); **Pluralize:** 1.0.0.
 - **IDE:** IntelliJ IDEA; **BD:** PostgreSQL con pgAdmin 4.
@@ -205,7 +206,7 @@ La unicidad de `Lot.batchNumber` está definida por negocio en JPA; decidir si d
 4. Conservar Commands/Queries y servicios separados.
 5. Desactivar Product en lugar de eliminarlo.
 6. Crear Lot con cantidad cero; registrar entradas/salidas mediante movimientos trazables.
-7. No publicar endpoints de cambio directo de cantidad de lote: Operations ya registra movimientos y modifica lotes mediante ACL transaccional; AuditLog de negocio sigue pendiente.
+7. No publicar endpoints de cambio directo de cantidad de lote: Operations registra movimientos mediante ACL transaccional; AuditLog de negocio está implementado en Monitoring e integrado en Operations, con registro funcional confirmado manualmente; rollback conjunto pendiente.
 8. Mantener los filtros combinados pospuestos hasta que se decida cambiar el contrato.
 9. No confiar en `businessId` enviado por el cliente como autorización: IAM y aislamiento de negocio están pendientes.
 10. Usar `ddl-auto=update` solo para desarrollo local.
@@ -299,15 +300,87 @@ Los POST devuelven `201`, GET y PATCH exitosos `200` según el reporte. No exist
 4. **Conteo sin bloqueo:** `systemQuantity` es una foto que puede quedar obsoleta; al ajustar se valida contra el stock actual bajo lock.
 5. **Integridad y errores HTTP:** revisar FKs, manejo de `DataIntegrityViolationException`, `IllegalStateException` y consistencia de `400/404/409`.
 6. **Contrato Angular:** frontend podría usar `IN/OUT` e IDs string; backend usa `ENTRY/EXIT` y `Long`. Validar adaptación antes de integrar.
-7. **Trazabilidad de negocio:** auditoría JPA `createdAt/updatedAt` **no equivale** a AuditLog; integrar en Monitoring.
+7. **Trazabilidad de negocio:** auditoría JPA `createdAt/updatedAt` **no equivale** a AuditLog; Monitoring ya implementa AuditLog y Operations registra acciones, con persistencia funcional confirmada manualmente; falta probar rollback con PostgreSQL.
 8. **Flujo de ajustes:** decidir si ADMIN puede aplicar ajustes directos mientras existe una solicitud pendiente; documentar la política.
 9. **Base de pruebas:** `bodego_test_db` y `application-test.properties` se propusieron; no está acreditado que la única prueba Maven utilizara el perfil `test`. `create-drop` solo sobre base de pruebas, nunca sobre `bodego_db`.
 
-## 10A. Próxima etapa — Monitoring (Auditoría y Seguimiento)
+## 10A. Bounded Context Monitoring — implementado (2026-11-10)
 
-**Próximo BC acordado:** `monitoring`, con `Alert` y `AuditLog`, aún no implementados según el reporte de Operations. Definir primero contratos de integración con Catalog/Operations evitando dependencias bidireccionales entre contextos. Posteriormente quedan `strategic-offers` e IAM. Las pruebas automatizadas de integración de Operations se pospusieron expresamente para avanzar al siguiente BC; mantenerlas como deuda técnica.
+**Estado documentado:** completadas Etapas 1–5 y reporte consolidado. **IMPLEMENTADO:** Alert, generación idempotente por negocio, consultas/resolución, AuditLog inmutable, fachada interna y auditoría desde Operations. **PROBADO EN EL CHAT DE IMPLEMENTACIÓN:** `clean compile` (199 fuentes, `release 25`), suite completa de **56 pruebas sin fallos**, arranque Spring/HTTP sin conexión funcional a BD, Swagger/OpenAPI con 6 contratos y 11 comprobaciones HTTP de validaciones/métodos. **NO VERIFICADO EN AQUELLA EJECUCIÓN:** JDK 25 exacto, conexión/persistencia PostgreSQL, DDL, consultas JPA reales, operaciones HTTP válidas sobre datos, concurrencia/bloqueo y rollback de filas. **ACTUALIZACIÓN POSTERIOR:** el usuario confirmó manualmente tablas y flujos funcionales con PostgreSQL (véase 10A.6); concurrencia y rollback siguen sin verificarse. Se usó JDK 27 local y `ddl-auto=none` solo en los procesos de prueba; la conexión `localhost:5432` fue rechazada y faltaba `DB_PASSWORD` en ese entorno. No se modificó `pom.xml`, Shared ni configuración.
 
-**Nota de continuidad:** no confundir los timestamps de auditoría JPA con el historial funcional de `AuditLog`. Conservar la ACL Catalog↔Operations y no introducir `REQUIRES_NEW` en flujos que requieren una única transacción.
+### 10A.1 Modelo y arquitectura
+
+- Paquete `com.bodego.platform.monitoring`; estructura `domain/model/{aggregates,valueobjects,commands,queries}`, `domain/services`, `application/internal/{commandservices,queryservices,outboundservices/acl}`, `infrastructure/persistence/jpa/repositories`, `interfaces/{acl,rest}` y `interfaces/rest/{resources,transform}`.
+- `Alert`: `businessId`, `productId`, `lotId` opcional, `type: LOW_STOCK/EXPIRING_SOON/EXPIRED`, `severity: LOW/MEDIUM/HIGH`, `message` (255), `resolved`, `generatedAt`, `resolvedAt` opcional, además de `id/createdAt/updatedAt`. Resolución idempotente: la segunda resolución no altera la primera fecha; se utiliza bloqueo `PESSIMISTIC_WRITE` al resolver.
+- `AuditLog`: `businessId`, `userId` opcional, `action` (100), `entityType` (100), `entityId`, `description` (1000), `occurredAt` e identificador/timestamps heredados. Inmutable para actualizaciones de negocio gestionadas con Hibernate (`@Immutable`, `updatable=false`), sin escritura REST. No protege contra SQL externo o borrados internos arbitrarios.
+- Las referencias entre contextos son IDs, no relaciones JPA directas. `businessId` y filtros no equivalen a autorización; `userId` permanece `null` hasta implementar IAM.
+- Commands: `ResolveAlertCommand`, `GenerateAlertsCommand`, `RecordAuditLogCommand`; Queries: `GetAlertByIdQuery`, `GetAlertsQuery`, `GetAuditLogByIdQuery`, `GetAuditLogsQuery`.
+- Repositorios: `AlertRepository`, `AuditLogRepository`; componente `AlertGenerationLock`; fachada `MonitoringContextFacade`.
+
+### 10A.2 Contratos REST
+
+Base `/api/v1`:
+
+| Método | Ruta | Contrato |
+|---|---|---|
+| POST | `/alerts/generate` | Body `{ "businessId": 1 }`; `200` con alertas **nuevas** o `[]` |
+| GET | `/alerts` | Filtros opcionales `businessId`, `productId`, `lotId`, `resolved`, combinables con AND |
+| GET | `/alerts/{id}` | Consultar; `200` / `404` |
+| PATCH | `/alerts/{id}/resolve` | Sin body; resolución idempotente; `200` / `404` |
+| GET | `/audit-logs` | Filtros opcionales `businessId`, `entityType`, `entityId`, combinables con AND |
+| GET | `/audit-logs/{id}` | Consultar; `200` / `404` |
+
+IDs no positivos y solicitudes inválidas dan `400`. No existen POST arbitrarios de Alert ni endpoints públicos de escritura de AuditLog; métodos no permitidos devuelven `405`. Alert ordena por `generatedAt DESC, id DESC`; AuditLog por `occurredAt DESC, id DESC`. La verificación HTTP real se limitó a Swagger/OpenAPI y 11 solicitudes inválidas/no permitidas; **no se ejecutaron solicitudes válidas que necesitaran datos**.
+
+### 10A.3 Reglas de generación de Alert
+
+- `LOW_STOCK`: suma de `Lot.quantity` de **todos** los lotes del producto, usando `long`, estrictamente menor que `minimumStock`; alerta a nivel producto (`lotId=null`), severidad `MEDIUM`.
+- `EXPIRING_SOON`: vencimiento entre hoy y hoy + 7 días inclusive, severidad `MEDIUM`; `EXPIRED`: vencimiento anterior a hoy, severidad `HIGH`. Fecha de evaluación en UTC, capturada una vez por generación.
+- Se incluyen productos inactivos y lotes de cantidad cero; los lotes sin fecha no generan alerta por vencimiento. No se resuelven alertas automáticamente al desaparecer la condición. Una alerta resuelta puede generarse nuevamente si persiste la condición; el historial se conserva.
+- No duplicar una alerta activa con la misma combinación negocio/producto/lote/tipo. El flujo implementado adquiere **bloqueo advisory transaccional PostgreSQL por negocio** antes de consultar Catalog, con `READ_COMMITTED`, namespace `1297043017` y clave `Long.hashCode(businessId)`. Usa `SELECT count(*) FROM pg_advisory_xact_lock(:namespace, :businessKey)`. La eficacia real del bloqueo **no se probó con PostgreSQL**; tampoco existe índice único parcial, y otros creadores deben respetar el protocolo.
+- Monitoring consulta Catalog mediante `ExternalCatalogService` y `CatalogContextFacade`, que fue ampliada con `getProductsByBusinessId` y `getLotsByProductId`. Catalog entrega `ProductInventorySnapshot(id,businessId,minimumStock)` y `LotInventorySnapshot(id,businessId,productId,quantity,expirationDate)`; no expone entidades JPA ni permite modificar stock desde Monitoring. El bean del adaptador se llama `monitoringExternalCatalogService` para evitar colisión con Operations.
+
+### 10A.4 Auditoría Operations → Monitoring
+
+- `operations/application/internal/outboundservices/acl/ExternalMonitoringService` delega en `MonitoringContextFacade.recordAction(businessId,userId,action,entityType,entityId,description)`; Operations pasa `userId=null` mientras IAM no existe.
+- La fachada y el servicio de comando AuditLog requieren transacción activa mediante `Propagation.MANDATORY`; se propagan errores, sin `REQUIRES_NEW`, de modo que se **espera** atomicidad de la operación y su auditoría (rollback de filas todavía sin verificar).
+- Se modificaron cinco handlers existentes de Operations, después de `save`/`flush`, sin cambiar endpoints ni Commands/Resources:
+
+| Handler | Acción de auditoría |
+|---|---|
+| InventoryMovement | `INVENTORY_MOVEMENT_REGISTERED` |
+| PhysicalCount | `PHYSICAL_COUNT_CREATED` |
+| StockAdjustment | `STOCK_ADJUSTMENT_APPLIED` |
+| Waste | `WASTE_REGISTERED` |
+| CorrectionRequest (crear) | `CORRECTION_REQUEST_CREATED` |
+| CorrectionRequest (aprobar) | `CORRECTION_REQUEST_APPROVED` |
+| CorrectionRequest (rechazar) | `CORRECTION_REQUEST_REJECTED` |
+
+Una merma o ajuste registra también el movimiento generado como acción separada; aprobar una solicitud registra solicitud, ajuste y movimiento en la misma transacción. No se duplican las acciones en los handlers superiores. Las descripciones usan IDs/estados/cantidades, sin copiar observaciones o payloads sensibles.
+
+### 10A.5 Evidencia, cambios y pendientes
+
+- `\.\mvnw.cmd clean compile`: `BUILD SUCCESS`, 199 fuentes, Java `release 25`, Spring Boot 4.0.9.
+- `\.\mvnw.cmd test '-Dspring.jpa.hibernate.ddl-auto=none'`: `BUILD SUCCESS`, **56 pruebas** (1 contextLoads, 43 Monitoring, 12 OperationsMonitoringTests), sin fallos, errores ni omitidas. Las pruebas de transacción usan gestor sin BD y persistencia simulada; no prueban rollback SQL.
+- Servidor temporal puerto `18091`, con `ddl-auto=none`: Swagger UI y `/v3/api-docs` respondieron `200`; 11 comprobaciones HTTP devolvieron los `400/405` esperados. Servidor detenido al concluir.
+- `CatalogContextFacade.java` se amplió en Etapa 2; se añadieron dos records snapshot. En Etapa 4 se modificaron cinco command services de Operations y se añadieron adaptador y pruebas. Sin commits, merges, pushes ni cambios de rama al cierre del reporte; archivos nuevos aún sin seguimiento en Git.
+- **Alta prioridad:** crear/usar PostgreSQL de pruebas de forma segura; automatizar DDL/JPA y consultas reales, casos límite `lotId=null`, generación concurrente, rollback conjunto stock/operación/log, resolución concurrente y aislamiento entre negocios. Las verificaciones funcionales manuales ya fueron confirmadas. No usar `create-drop` sobre `bodego_db`.
+- **Pendientes generales:** IAM (identidad, permisos ADMIN y negocio confiable), migraciones, paginación, optimización de consultas de lotes, integración Angular y pruebas de Operations con BD. La ubicación reportada de `application-test.properties` es no convencional (`src/test/java/resources/`); verificar antes de modificar.
+
+**Siguiente etapa funcional:** Strategic Offers o IAM, según coordinación del equipo. Monitoring ya no debe figurar como pendiente de implementación; solo quedan sus verificaciones de persistencia y endurecimiento.
+
+### 10A.6 Actualización de verificaciones PostgreSQL — 2026-11-10
+
+**Confirmado posteriormente por el usuario (verificación manual):**
+
+1. Las tablas `alerts` y `audit_logs` aparecen en PostgreSQL. Se ejecutó una consulta de presencia de tablas; no se compartió salida completa de columnas ni constraints.
+2. Los endpoints permiten guardar y consultar registros reales.
+3. La generación y resolución de alertas funcionan.
+4. Las operaciones de inventario generan registros de auditoría.
+
+**Pendiente:** punto 5, pruebas avanzadas de concurrencia, rollback y atomicidad de transacciones (incluida reversión conjunta de stock, operación y auditoría). La confirmación manual no reemplaza pruebas automatizadas ni acredita cada caso límite o constraint de base de datos.
+
+**Nota cronológica:** las limitaciones de PostgreSQL del reporte de Etapa 5 describen el entorno de ejecución de ese reporte, anterior a estas comprobaciones manuales. No deben interpretarse como estado funcional vigente.
 
 ## 11. Procedimiento de actualización del documento
 
@@ -327,3 +400,5 @@ Al cerrar cada chat especializado:
 |---|---|---|
 | 1.0 | 2026-11-08 | Consolidación inicial de Shared y Catalog; Category, Product y Lot. |
 | 1.1 | 2026-11-10 | Incorporado Operations (cinco agregados), ACL Catalog↔Operations, 16 endpoints REST, pruebas manuales, riesgos de concurrencia y siguiente BC Monitoring. |
+| 1.2 | 2026-11-10 | Incorporado Monitoring (Alert/AuditLog), 6 endpoints, reglas de generación, ACL Catalog y auditoría Operations, 56 pruebas, verificación Swagger/HTTP y pendientes PostgreSQL/IAM. |
+| 1.2.1 | 2026-11-10 | Usuario confirmó tablas y flujos funcionales de Monitoring con PostgreSQL; quedan pendientes concurrencia, rollback y atomicidad automatizados. |
