@@ -43,8 +43,8 @@ public class PhysicalCount extends AuditableAbstractAggregateRoot<PhysicalCount>
     @Column(name = "count_date", nullable = false)
     private LocalDateTime date;
 
-    @Size(max = 500)
-    @Column(name = "observation", length = 500)
+    @Size(max = 255)
+    @Column(name = "observation", length = 255)
     private String observation;
 
     protected PhysicalCount() {
