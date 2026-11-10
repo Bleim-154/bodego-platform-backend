@@ -27,14 +27,41 @@ public class CatalogContextFacade {
     public CatalogContextFacade(
             LotCommandService lotCommandService,
             LotQueryService lotQueryService,
-            ProductQueryService productQueryService) {
+            ProductQueryService productQueryService
+    ) {
         this.lotCommandService = lotCommandService;
         this.lotQueryService = lotQueryService;
         this.productQueryService = productQueryService;
     }
 
     @Transactional(readOnly = true)
-    public List<ProductInventorySnapshot> getProductsByBusinessId(Long businessId) {
+    public ProductInventorySnapshot getProductById(
+            Long businessId,
+            Long productId
+    ) {
+        if (businessId == null || businessId <= 0 || productId == null || productId <= 0) {
+            throw new IllegalArgumentException("Business ID and product ID must be positive");
+        }
+
+        var product = productQueryService.handle(new GetProductByIdQuery(productId))
+                .orElseThrow(() -> new IllegalArgumentException("Product not found"));
+        if (!businessId.equals(product.getBusinessId())) {
+            throw new IllegalArgumentException("Product does not belong to the business");
+        }
+
+        return new ProductInventorySnapshot(
+                product.getId(),
+                product.getBusinessId(),
+                product.getMinimumStock(),
+                product.getName(),
+                product.getActive()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProductInventorySnapshot> getProductsByBusinessId(
+            Long businessId
+    ) {
         if (businessId == null || businessId <= 0) {
             throw new IllegalArgumentException("Business ID must be positive");
         }
@@ -46,13 +73,21 @@ public class CatalogContextFacade {
                         throw new IllegalArgumentException("Product does not belong to the business");
                     }
                     return new ProductInventorySnapshot(
-                            product.getId(), product.getBusinessId(), product.getMinimumStock());
+                            product.getId(),
+                            product.getBusinessId(),
+                            product.getMinimumStock(),
+                            product.getName(),
+                            product.getActive()
+                    );
                 })
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public List<LotInventorySnapshot> getLotsByProductId(Long businessId, Long productId) {
+    public List<LotInventorySnapshot> getLotsByProductId(
+            Long businessId,
+            Long productId
+    ) {
         if (businessId == null || businessId <= 0 || productId == null || productId <= 0) {
             throw new IllegalArgumentException("Business ID and product ID must be positive");
         }
@@ -71,8 +106,12 @@ public class CatalogContextFacade {
                         throw new IllegalArgumentException("Lot does not belong to the business and product");
                     }
                     return new LotInventorySnapshot(
-                            lot.getId(), lot.getBusinessId(), lot.getProductId(),
-                            lot.getQuantity(), lot.getExpirationDate());
+                            lot.getId(),
+                            lot.getBusinessId(),
+                            lot.getProductId(),
+                            lot.getQuantity(),
+                            lot.getExpirationDate()
+                    );
                 })
                 .toList();
     }
@@ -81,7 +120,8 @@ public class CatalogContextFacade {
             Long businessId,
             Long lotId,
             boolean entry,
-            Integer quantity) {
+            Integer quantity
+    ) {
 
         var lot = lotQueryService
                 .handle(new GetLotByIdQuery(lotId))
@@ -95,9 +135,15 @@ public class CatalogContextFacade {
 
         var result = entry
                 ? lotCommandService.handle(
-                new IncreaseLotQuantityCommand(lotId, quantity))
+                new IncreaseLotQuantityCommand(
+                        lotId,
+                        quantity
+                ))
                 : lotCommandService.handle(
-                new DecreaseLotQuantityCommand(lotId, quantity));
+                new DecreaseLotQuantityCommand(
+                        lotId,
+                        quantity
+                ));
 
         if (result.isEmpty()) {
             throw new IllegalArgumentException(
@@ -109,7 +155,8 @@ public class CatalogContextFacade {
     public void validateLotStock(
             Long businessId,
             Long lotId,
-            Integer expectedQuantity) {
+            Integer expectedQuantity
+    ) {
 
         lotCommandService.handle(
                 new ValidateLotStockCommand(
@@ -120,7 +167,10 @@ public class CatalogContextFacade {
         );
     }
 
-    public Integer getLotQuantity(Long businessId, Long lotId) {
+    public Integer getLotQuantity(
+            Long businessId,
+            Long lotId
+    ) {
 
         if (businessId == null || businessId <= 0 ||
                 lotId == null || lotId <= 0) {
