@@ -7,6 +7,7 @@ import com.bodego.platform.catalog.infrastructure.persistence.jpa.repositories.L
 import com.bodego.platform.catalog.infrastructure.persistence.jpa.repositories.ProductRepository;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
@@ -106,6 +107,36 @@ public class LotCommandServiceImpl implements LotCommandService {
         lot.get().decreaseQuantity(command.amount());
 
         return Optional.of(lotRepository.save(lot.get()));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void handle(ValidateLotStockCommand command) {
+
+        if (command == null
+                || command.businessId() == null
+                || command.businessId() <= 0
+                || command.lotId() == null
+                || command.lotId() <= 0
+                || command.expectedQuantity() == null
+                || command.expectedQuantity() < 0) {
+            throw new IllegalArgumentException(
+                    "Invalid lot stock validation command");
+        }
+
+        var lot = lotRepository.findWithLockById(command.lotId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Lot not found"));
+
+        if (!lot.getBusinessId().equals(command.businessId())) {
+            throw new IllegalArgumentException(
+                    "Lot does not belong to the business");
+        }
+
+        if (!lot.getQuantity().equals(command.expectedQuantity())) {
+            throw new IllegalStateException(
+                    "Lot stock has changed since the physical count");
+        }
     }
 
     private void validateProduct(Long productId, Long businessId) {

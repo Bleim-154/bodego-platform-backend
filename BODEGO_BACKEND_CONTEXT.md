@@ -1,13 +1,13 @@
 # BodeGo Backend — Contexto maestro de continuidad
 
-**Versión documental:** 1.0  
-**Actualización:** 2026-11-08  
-**Fuentes:** reportes de Configuración y Shared y de Catálogo e Inventario, aportados por los chats de desarrollo.  
+**Versión documental:** 1.1  
+**Actualización:** 2026-11-10  
+**Fuentes:** reportes de Configuración y Shared, Catálogo e Inventario y Operations (corte 2026-11-10), aportados por los chats de desarrollo.  
 **Alcance de evidencia:** avances comunicados y pruebas manuales confirmadas por el usuario; **no se inspeccionó el repositorio backend ni se ejecutó su código** para elaborar esta versión.
 
 ## 1. Estado ejecutivo
 
-BodeGo es una plataforma de inventarios para bodegas y minimarkets. El backend es un monolito modular Spring Boot con DDD por Bounded Context y CQRS ligero. La infraestructura y el paquete `shared` están configurados. En `catalog` se han implementado y probado manualmente **Category, Product y Lot** con endpoints REST, servicios, JPA y PostgreSQL. El siguiente trabajo prioritario es **Operaciones Diarias y Mermas**, empezando por el flujo de movimientos de inventario que debe actualizar cantidades de lotes con trazabilidad.
+BodeGo es una plataforma de inventarios para bodegas y minimarkets. El backend es un monolito modular Spring Boot con DDD por Bounded Context y CQRS ligero. La infraestructura y el paquete `shared` están configurados. En `catalog` se han implementado y probado manualmente **Category, Product y Lot**. En `operations` se implementaron y probaron manualmente **InventoryMovement, PhysicalCount, StockAdjustment, Waste y CorrectionRequest**. Las modificaciones de stock de Operations se canalizan mediante una ACL hacia Catalog y se realizan en transacciones. **Siguiente Bounded Context: Monitoring (Alert y AuditLog)**. Las pruebas automatizadas de integración y concurrencia siguen pendientes.
 
 | Área | Estado según reportes |
 |---|---|
@@ -16,12 +16,12 @@ BodeGo es una plataforma de inventarios para bodegas y minimarkets. El backend e
 | Catalog: Category | CRUD y reglas principales probados en Swagger |
 | Catalog: Product | Creación, lectura, edición y activación/desactivación probados |
 | Catalog: Lot | Creación, consulta y edición probadas; comandos internos de cantidad sin REST |
-| Operaciones Diarias y Mermas | Pendiente |
+| Operations: InventoryMovement, PhysicalCount, StockAdjustment, Waste, CorrectionRequest | Implementados; flujos REST probados manualmente |
 | IAM y seguridad | Pendiente |
 | Ofertas Estratégicas | Pendiente |
 | Auditoría y Seguimiento | Pendiente |
 | Integración real con Angular | No acreditada por estos reportes |
-| Pruebas automatizadas | No acreditadas |
+| Pruebas automatizadas | Una prueba Maven exitosa (1 ejecutada); suite de integración de Operations pendiente |
 
 ## 2. Stack y configuración vigente
 
@@ -119,7 +119,7 @@ Cada agregado tiene Commands, Queries, interfaces de servicios, implementaciones
 - **Creación obligatoria con `quantity = 0`** para impedir stock inicial sin movimiento trazable.
 - `updateInformation(batchNumber, expirationDate)`, `increaseQuantity(amount)`, `decreaseQuantity(amount)`; cambios requieren cantidad positiva y nunca stock negativo.
 - `LotRepository.findWithLockById` usa `PESSIMISTIC_WRITE` para modificaciones de cantidad dentro de transacciones.
-- Los comandos de aumentar/disminuir cantidad existen internamente **pero no tienen endpoints REST**.
+- Los comandos de aumentar/disminuir cantidad existen internamente **pero no tienen endpoints REST**; Operations los utiliza mediante la fachada ACL de Catalog.
 
 **Cardinalidades conceptuales:** Business 1:N Category, Product y Lot; Category 1:N Product; Product 1:N Lot. Son referencias por ID y validaciones de aplicación, **no claves foráneas JPA declaradas entre agregados**. El stock total de producto se concibe como suma de cantidades de sus lotes; todavía no hay endpoint de stock agregado.
 
@@ -184,7 +184,7 @@ Los errores de filtros combinados producen `400` sin cuerpo, fuera del formato h
 
 **Confirmado por el usuario en los chats:** compilación Maven `BUILD SUCCESS`, arranque Spring Boot, conexión PostgreSQL, creación/consulta de tablas `categories`, `products`, `lots`, operaciones manuales de Category/Product/Lot desde Swagger, conflicto `409` por categoría con productos y por producto duplicado (incluidas variantes de mayúsculas), y registro del mismo nombre en negocios distintos.
 
-**No comprobado directamente al consolidar:** código del repositorio, versión exacta de Spring Boot, índices SQL únicos normalizados, pruebas automatizadas, concurrencia real, integridad de FK, seguridad multinegocio, integración Angular-backend y ejecución de movimientos de inventario.
+**No comprobado directamente al consolidar:** código del repositorio, versión exacta de Spring Boot, índices SQL únicos normalizados, concurrencia real, integridad de FK, seguridad multinegocio e integración Angular-backend. **Actualización 2026-11-10:** Operations reportó pruebas manuales de movimientos de inventario y una prueba Maven exitosa, sin suite de integración de Operations.
 
 Se propusieron estos índices SQL (su presencia efectiva **no está confirmada**):
 
@@ -205,29 +205,109 @@ La unicidad de `Lot.batchNumber` está definida por negocio en JPA; decidir si d
 4. Conservar Commands/Queries y servicios separados.
 5. Desactivar Product en lugar de eliminarlo.
 6. Crear Lot con cantidad cero; registrar entradas/salidas mediante movimientos trazables.
-7. No publicar endpoints de cambio directo de cantidad de lote antes de integrar movimientos y auditoría.
+7. No publicar endpoints de cambio directo de cantidad de lote: Operations ya registra movimientos y modifica lotes mediante ACL transaccional; AuditLog de negocio sigue pendiente.
 8. Mantener los filtros combinados pospuestos hasta que se decida cambiar el contrato.
 9. No confiar en `businessId` enviado por el cliente como autorización: IAM y aislamiento de negocio están pendientes.
 10. Usar `ddl-auto=update` solo para desarrollo local.
 
-## 10. Próxima etapa: Operaciones Diarias y Mermas
+## 10. Bounded Context Operations — implementado (2026-11-10)
 
-**Antes de implementar:** revisar el frontend Angular existente y los contratos reales para `InventoryMovement`, `PhysicalCount`, `StockAdjustment`, `Waste` y `CorrectionRequest`. Son **nombres conceptuales**, todavía no clases Java confirmadas.
+**Estado y evidencia:** cinco agregados implementados y probados manualmente desde Swagger según confirmación del usuario. No se inspeccionó el repositorio local ni se verificaron todas las respuestas negativas. Las pruebas de integración de Operations se pausaron expresamente. `\.\mvnw.cmd test` informó **1 prueba, 0 fallos, 0 errores y BUILD SUCCESS**; no acredita rollback, concurrencia o aislamiento entre negocios.
 
-**Prioridad técnica:** definir un flujo transaccional que registre `InventoryMovement` y actualice `Lot.quantity` de forma atómica, con trazabilidad, validación de pertenencia a negocio y protección ante concurrencia. Revisar la frontera entre `catalog` y operaciones para no generar dependencias circulares. El reporte de Catalog no acredita que ese flujo ya exista.
+### 10.1 Arquitectura e integración con Catalog
 
-**Después:** conteos físicos, ajustes, mermas y solicitudes de corrección; IAM, ofertas y monitoreo en etapas posteriores según prioridades.
+- Paquete: `com.bodego.platform.operations`; capas `domain/model/{aggregates,valueobjects,commands,queries}`, `domain/services`, `application/internal/{commandservices,queryservices,outboundservices/acl}`, `infrastructure/persistence/jpa/repositories` e `interfaces/rest/{resources,transform}`.
+- Agregados: `InventoryMovement`, `PhysicalCount`, `StockAdjustment`, `Waste`, `CorrectionRequest`; cada uno tiene servicios Command/Query, repositorio JPA y controlador REST.
+- **ACL entre BC:** `operations/application/internal/outboundservices/acl/ExternalCatalogService.java` consume `catalog/interfaces/acl/CatalogContextFacade.java`. Operations no modifica `Lot` mediante su repositorio directamente.
+- Contrato ACL: `registerMovement(businessId,lotId,entry,quantity)`; `getLotQuantity(businessId,lotId)`; `validateLotStock(businessId,lotId,expectedQuantity)`.
+- Catalog incorporó `ValidateLotStockCommand` y su handler con `@Transactional(propagation = MANDATORY)`: valida stock esperado con `LotRepository.findWithLockById` (`PESSIMISTIC_WRITE`) en la misma transacción del ajuste. La lectura de `getLotQuantity` para conteos no bloquea.
+- Los flujos que cambian stock usan `@Transactional`: movimiento + lote; merma + movimiento + lote; ajuste + movimiento + lote; aprobación de solicitud + ajuste + movimiento + lote. **Atomicidad esperada, sin pruebas automatizadas de rollback todavía**.
+- Referencias entre agregados y BC por `Long` (`businessId`, `lotId`, `physicalCountId`), sin asociaciones JPA directas acreditadas.
 
-### Pendientes técnicos
+### 10.2 Modelo y reglas de negocio
 
-- Diseñar el contrato entre operaciones y `LotCommandService` sin dependencias circulares.
-- Definir ingreso inicial mediante movimiento (Lot nace en cero).
-- Probar transacciones, bloqueo pesimista y concurrencia.
-- Revisar autorización multinegocio en consultas y mutaciones.
-- Comprobar índices únicos normalizados y añadir manejo de `DataIntegrityViolationException` cuando corresponda.
-- Revisar integridad de Category/Product/Lot, política de lotes duplicados y fechas de vencimiento.
-- Añadir pruebas automatizadas y pruebas de integración Angular.
-- Considerar migraciones con Flyway antes de entornos estables.
+| Agregado / tabla | Campos y reglas principales |
+|---|---|
+| `InventoryMovement` / `inventory_movements` | `businessId`, `lotId`, `type: ENTRY/EXIT`, `quantity > 0`, `reason` (máx. 255); ENTRY aumenta y EXIT reduce `Lot.quantity`; valida negocio, lote y stock disponible. Historial sin edición REST. |
+| `PhysicalCount` / `physical_counts` | `businessId`, `lotId`, `systemQuantity`, `countedQuantity`, `difference`, `observation` (500), `countedAt`; `difference = countedQuantity - systemQuantity`; captura snapshot del stock sin alterarlo. |
+| `StockAdjustment` / `stock_adjustments` | `businessId`, `physicalCountId`, `lotId`, `previousQuantity`, `newQuantity`, `difference`, `reason` (255), `adjustedAt`; diferencia no nula ni cero; **un ajuste máximo por conteo** (`UNIQUE physicalCountId`); comprueba stock actual contra snapshot y crea movimiento ENTRY/EXIT compensatorio. |
+| `Waste` / `wastes` | `businessId`, `lotId`, `quantity > 0`, `reason: EXPIRED/DAMAGED/DETERIORATED/OTHER`, `observation` (500), `registeredAt`; genera movimiento EXIT con motivo `WASTE: <REASON>`. |
+| `CorrectionRequest` / `correction_requests` | `businessId`, `physicalCountId`, `reason` (1–500), `status: PENDING/APPROVED/REJECTED`, `requestedAt`, `reviewedAt`, `reviewComment`; solo un PENDING por conteo según validación de aplicación; aprobar aplica StockAdjustment, rechazar no cambia stock; revisión bloquea la solicitud con `PESSIMISTIC_WRITE`. |
+
+**Relaciones conceptuales:** Lot 1:N InventoryMovement/PhysicalCount/Waste/StockAdjustment; PhysicalCount 1:N CorrectionRequest (histórico, a lo sumo una pendiente según regla); PhysicalCount 1:0..1 StockAdjustment. Son relaciones lógicas por ID, no FKs verificadas. `StockAdjustment` no documenta `correctionRequestId`.
+
+### 10.3 REST de Operations
+
+Base: `/api/v1`. Las rutas siguientes fueron descritas como implementadas; los GET listados permiten solo los filtros indicados, salvo la combinación especial de solicitudes.
+
+| Método | Ruta | Función / filtros |
+|---|---|---|
+| POST | `/inventory-movements` | Registrar ENTRY/EXIT |
+| GET | `/inventory-movements` | Todos, `businessId` **o** `lotId` |
+| GET | `/inventory-movements/{id}` | Consultar por ID |
+| POST | `/physical-counts` | Registrar conteo sin modificar stock |
+| GET | `/physical-counts` | Todos, `businessId` **o** `lotId` |
+| GET | `/physical-counts/{id}` | Consultar por ID |
+| POST | `/stock-adjustments` | Aplicar ajuste desde conteo |
+| GET | `/stock-adjustments` | Todos, `businessId` **o** `lotId` **o** `physicalCountId` |
+| GET | `/stock-adjustments/{id}` | Consultar por ID |
+| POST | `/wastes` | Registrar merma y movimiento EXIT |
+| GET | `/wastes` | Todos, `businessId` **o** `lotId` |
+| GET | `/wastes/{id}` | Consultar por ID |
+| POST | `/correction-requests` | Crear solicitud |
+| PATCH | `/correction-requests/{id}/review` | Aprobar o rechazar (`decision: APPROVED/REJECTED`) |
+| GET | `/correction-requests` | Todos, `businessId`, `physicalCountId` o `businessId` + `status` |
+| GET | `/correction-requests/{id}` | Consultar por ID |
+
+**Ejemplos de payloads documentados:**
+
+```json
+{"businessId":1,"lotId":1,"type":"EXIT","quantity":2,"reason":"Salida de inventario"}
+```
+
+```json
+{"businessId":1,"lotId":1,"countedQuantity":15,"observation":"Conteo de almacén"}
+```
+
+```json
+{"businessId":1,"physicalCountId":1,"reason":"Diferencia validada"}
+```
+
+```json
+{"businessId":1,"lotId":1,"quantity":4,"reason":"DAMAGED","observation":"Unidades dañadas"}
+```
+
+```json
+{"businessId":1,"physicalCountId":1,"reason":"Diferencia en conteo"}
+```
+
+```json
+{"businessId":1,"decision":"APPROVED","reviewComment":"Diferencia verificada"}
+```
+
+Los POST devuelven `201`, GET y PATCH exitosos `200` según el reporte. No existen PUT/DELETE de estos agregados ni endpoints REST para modificar directamente cantidades de Lot. Los filtros incompatibles se rechazan; errores HTTP de dominio requieren revisión de consistencia.
+
+### 10.4 Verificaciones y pendientes específicos
+
+**Confirmado por usuario:** compilación/arranque incremental; movimiento modifica lote; conteo no modifica stock; creación y consulta de ajustes, mermas y solicitudes; revisión de solicitudes. `mvnw.cmd test` ejecutó **una sola prueba exitosa** (2026-11-10 12:54:27 -05:00). **No confirmados:** suite de integración, concurrencia, rollback, permisos y aislamiento multinegocio.
+
+**Riesgos prioritarios:**
+
+1. **IAM no implementado:** `businessId` proviene del cliente; no hay autorización ADMIN para aplicar ajustes o revisar solicitudes ni aislamiento seguro en lecturas.
+2. **Solicitudes PENDING concurrentes:** `existsByPhysicalCountIdAndStatus` no evita carreras. Evaluar índice único parcial `physical_count_id WHERE status='PENDING'` en PostgreSQL, con migración controlada.
+3. **Rollback y concurrencia:** probar stock insuficiente, ajuste con snapshot desactualizado, aprobación fallida, doble ajuste y salidas simultáneas; comprobar que no quedan cambios parciales.
+4. **Conteo sin bloqueo:** `systemQuantity` es una foto que puede quedar obsoleta; al ajustar se valida contra el stock actual bajo lock.
+5. **Integridad y errores HTTP:** revisar FKs, manejo de `DataIntegrityViolationException`, `IllegalStateException` y consistencia de `400/404/409`.
+6. **Contrato Angular:** frontend podría usar `IN/OUT` e IDs string; backend usa `ENTRY/EXIT` y `Long`. Validar adaptación antes de integrar.
+7. **Trazabilidad de negocio:** auditoría JPA `createdAt/updatedAt` **no equivale** a AuditLog; integrar en Monitoring.
+8. **Flujo de ajustes:** decidir si ADMIN puede aplicar ajustes directos mientras existe una solicitud pendiente; documentar la política.
+9. **Base de pruebas:** `bodego_test_db` y `application-test.properties` se propusieron; no está acreditado que la única prueba Maven utilizara el perfil `test`. `create-drop` solo sobre base de pruebas, nunca sobre `bodego_db`.
+
+## 10A. Próxima etapa — Monitoring (Auditoría y Seguimiento)
+
+**Próximo BC acordado:** `monitoring`, con `Alert` y `AuditLog`, aún no implementados según el reporte de Operations. Definir primero contratos de integración con Catalog/Operations evitando dependencias bidireccionales entre contextos. Posteriormente quedan `strategic-offers` e IAM. Las pruebas automatizadas de integración de Operations se pospusieron expresamente para avanzar al siguiente BC; mantenerlas como deuda técnica.
+
+**Nota de continuidad:** no confundir los timestamps de auditoría JPA con el historial funcional de `AuditLog`. Conservar la ACL Catalog↔Operations y no introducir `REQUIRES_NEW` en flujos que requieren una única transacción.
 
 ## 11. Procedimiento de actualización del documento
 
@@ -245,4 +325,5 @@ Al cerrar cada chat especializado:
 
 | Versión | Fecha | Cambios |
 |---|---|---|
-| 1.0 | 2026-11-08 | Consolidación inicial de los reportes de Shared y Catalog; estado actualizado a Category, Product y Lot; riesgos y contratos REST registrados. |
+| 1.0 | 2026-11-08 | Consolidación inicial de Shared y Catalog; Category, Product y Lot. |
+| 1.1 | 2026-11-10 | Incorporado Operations (cinco agregados), ACL Catalog↔Operations, 16 endpoints REST, pruebas manuales, riesgos de concurrencia y siguiente BC Monitoring. |

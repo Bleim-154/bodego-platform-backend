@@ -14,4 +14,6 @@ public interface LotCommandService {
     Optional<Lot> handle(IncreaseLotQuantityCommand command);
 
     Optional<Lot> handle(DecreaseLotQuantityCommand command);
+
+    void handle(ValidateLotStockCommand command);
 }
