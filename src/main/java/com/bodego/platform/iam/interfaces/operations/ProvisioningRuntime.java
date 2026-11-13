@@ -23,6 +23,11 @@ final class ProvisioningRuntime {
         return open(url,username,password,new Properties());
     }
     static AnnotationConfigApplicationContext open(String url,String username,char[] password,Properties connectionProperties) {
+        return open(url,username,password,connectionProperties,null);
+    }
+    static AnnotationConfigApplicationContext open(String url,String username,char[] password,Properties connectionProperties,
+                                                  ProvisioningDiagnostics diagnostics) {
+        if(diagnostics!=null) diagnostics.move(ProvisioningDiagnostics.Stage.WRITE_CONNECTION);
         var context=new AnnotationConfigApplicationContext();
         var dataSource=new HikariDataSource();
         dataSource.setJdbcUrl(url); dataSource.setUsername(username); dataSource.setPassword(new String(password));
@@ -30,8 +35,23 @@ final class ProvisioningRuntime {
         dataSource.setSchema("public"); dataSource.setMaximumPoolSize(2); dataSource.setPoolName("iam-controlled-provisioning");
         context.registerBean("dataSource",DataSource.class,() -> dataSource,definition -> definition.setDestroyMethodName("close"));
         context.register(Persistence.class);
-        try {context.refresh();return context;}
-        catch(RuntimeException exception) {context.close();dataSource.close();throw exception;}
+        try {
+            if(diagnostics!=null) {
+                try(var ignored=dataSource.getConnection()) { /* Separate pool/connection errors from JPA startup. */ }
+                diagnostics.move(ProvisioningDiagnostics.Stage.JPA_INITIALIZATION);
+            }
+            context.refresh();return context;
+        } catch(RuntimeException | java.sql.SQLException exception) {
+            if(diagnostics!=null) diagnostics.failure(exception);
+            try {context.close();} catch(RuntimeException cleanup) {
+                exception.addSuppressed(cleanup);if(diagnostics!=null) diagnostics.cleanupFailed(cleanup);
+            }
+            try {dataSource.close();} catch(RuntimeException cleanup) {
+                exception.addSuppressed(cleanup);if(diagnostics!=null) diagnostics.cleanupFailed(cleanup);
+            }
+            if(exception instanceof RuntimeException runtime) throw runtime;
+            throw new IllegalStateException("PROVISIONING_CONNECTION_FAILED",exception);
+        }
     }
 
     // Deliberately NOT @Configuration/@Component: normal application scanning must not discover this runtime.
