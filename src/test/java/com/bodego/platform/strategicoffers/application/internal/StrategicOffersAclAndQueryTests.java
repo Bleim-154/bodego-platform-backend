@@ -64,19 +64,19 @@ class StrategicOffersAclAndQueryTests {
     @Test
     void recommendationQueryForwardsEveryFilterIncludingNulls() {
         var repository = proxy(RecommendationRepository.class);
-        var service = new RecommendationQueryServiceImpl(repository);
+        var service = new RecommendationQueryServiceImpl(repository, com.bodego.platform.shared.application.security.TestBusinessAccess.admin());
         when(repository.findByFilters(1L, 2L, RecommendationType.EXPIRING, false)).thenReturn(List.of());
         assertTrue(service.handle(new GetRecommendationsQuery(1L, 2L, RecommendationType.EXPIRING, false)).isEmpty());
         verify(repository).findByFilters(1L, 2L, RecommendationType.EXPIRING, false);
         service.handle(new GetRecommendationsQuery(null, null, null, null));
-        verify(repository).findByFilters(null, null, null, null);
+        verify(repository).findByFilters(1L, null, null, null);
         assertTrue(service.handle(new GetRecommendationByIdQuery(99L)).isEmpty());
     }
 
     @Test
     void offerQueryForwardsAllFiltersAndMissingId() {
         var repository = proxy(OfferRepository.class);
-        var service = new OfferQueryServiceImpl(repository);
+        var service = new OfferQueryServiceImpl(repository, com.bodego.platform.shared.application.security.TestBusinessAccess.admin());
         service.handle(new GetOffersQuery(1L, 2L, false));
         verify(repository).findByFilters(1L, 2L, false);
         assertTrue(service.handle(new GetOfferByIdQuery(99L)).isEmpty());

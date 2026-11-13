@@ -16,6 +16,8 @@ import com.bodego.platform.operations.application.internal.commandservices.*;
 import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalInventoryService;
 import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalMonitoringService;
 import com.bodego.platform.operations.domain.model.aggregates.*;
+import com.bodego.platform.operations.domain.exceptions.CorrectionRequestAlreadyReviewedException;
+import com.bodego.platform.operations.domain.exceptions.PhysicalCountAlreadyAdjustedException;
 import com.bodego.platform.operations.domain.model.commands.*;
 import com.bodego.platform.operations.domain.model.valueobjects.*;
 import com.bodego.platform.operations.infrastructure.persistence.jpa.repositories.*;
@@ -43,19 +45,20 @@ class OperationsMonitoringTests {
     private final AuditLogCommandService auditCommands = proxy(AuditLogCommandService.class);
     private final ExternalMonitoringService monitoring =
             new ExternalMonitoringService(new MonitoringContextFacade(auditCommands));
-    private final CatalogContextFacade catalogFacade = new CatalogContextFacade(proxy(ProductQueryService.class));
+    private final ProductQueryService products = proxy(ProductQueryService.class);
+    private final CatalogContextFacade catalogFacade = new CatalogContextFacade(products);
     private final InventoryContextFacade inventoryFacade = new InventoryContextFacade(lotCommands, lots, catalogFacade);
     private final ExternalInventoryService catalog = new ExternalInventoryService(inventoryFacade);
     private final InventoryMovementCommandServiceImpl movementService =
-            new InventoryMovementCommandServiceImpl(movements, catalog, monitoring);
+            new InventoryMovementCommandServiceImpl(movements, catalog, monitoring, com.bodego.platform.shared.application.security.TestBusinessAccess.admin());
     private final PhysicalCountCommandServiceImpl countService =
-            new PhysicalCountCommandServiceImpl(counts, catalog, monitoring);
+            new PhysicalCountCommandServiceImpl(counts, catalog, monitoring, com.bodego.platform.shared.application.security.TestBusinessAccess.admin());
     private final StockAdjustmentCommandServiceImpl adjustmentService =
-            new StockAdjustmentCommandServiceImpl(adjustments, counts, movementService, catalog, monitoring);
+            new StockAdjustmentCommandServiceImpl(adjustments, counts, movementService, catalog, monitoring, com.bodego.platform.shared.application.security.TestBusinessAccess.admin());
     private final WasteCommandServiceImpl wasteService =
-            new WasteCommandServiceImpl(wastes, movementService, monitoring);
+            new WasteCommandServiceImpl(wastes, movementService, monitoring, com.bodego.platform.shared.application.security.TestBusinessAccess.admin());
     private final CorrectionRequestCommandServiceImpl requestService =
-            new CorrectionRequestCommandServiceImpl(requests, counts, adjustments, adjustmentService, monitoring);
+            new CorrectionRequestCommandServiceImpl(requests, counts, adjustments, adjustmentService, monitoring, com.bodego.platform.shared.application.security.TestBusinessAccess.admin());
     private final List<RecordAuditLogCommand> recorded = new ArrayList<>();
     private final Lot lot = new Lot(1L, 2L, "Batch", 10, null);
 
@@ -70,6 +73,9 @@ class OperationsMonitoringTests {
 
     @BeforeEach
     void setUp() {
+        var product=new com.bodego.platform.catalog.domain.model.aggregates.Product(1L,2L,"Fixture",null,java.math.BigDecimal.ONE,0);
+        identified(product,2L);
+        when(products.handle(new com.bodego.platform.catalog.domain.model.queries.GetProductByIdQuery(2L))).thenReturn(Optional.of(product));
         identified(lot, 3L);
         when(lots.handle(new GetLotByIdQuery(3L))).thenReturn(Optional.of(lot));
         when(lotCommands.handle(any(IncreaseLotQuantityCommand.class))).thenReturn(Optional.of(lot));
@@ -88,14 +94,14 @@ class OperationsMonitoringTests {
     private PhysicalCount count(int counted) {
         var count = new PhysicalCount(1L, 3L, 10, counted, "Private observation");
         identified(count, 12L);
-        when(counts.findById(12L)).thenReturn(Optional.of(count));
+        when(counts.findWithLockByIdAndBusinessId(12L, 1L)).thenReturn(Optional.of(count));
         return count;
     }
 
     private CorrectionRequest pending() {
         var request = new CorrectionRequest(1L, 12L, "Private reason");
         identified(request, 15L);
-        when(requests.findWithLockById(15L)).thenReturn(Optional.of(request));
+        when(requests.findWithLockByIdAndBusinessId(15L, 1L)).thenReturn(Optional.of(request));
         return request;
     }
 
@@ -174,7 +180,7 @@ class OperationsMonitoringTests {
         requestService.handle(new ReviewCorrectionRequestCommand(
                 1L, 15L, CorrectionRequestStatus.REJECTED, "Private comment"));
         assertActions("CORRECTION_REQUEST_REJECTED");
-        assertThrows(IllegalStateException.class, () -> requestService.handle(
+        assertThrows(CorrectionRequestAlreadyReviewedException.class, () -> requestService.handle(
                 new ReviewCorrectionRequestCommand(1L, 15L, CorrectionRequestStatus.REJECTED, null)));
         assertActions("CORRECTION_REQUEST_REJECTED");
         verifyNoInteractions(adjustments, movements);
@@ -203,7 +209,7 @@ class OperationsMonitoringTests {
                 new CreatePhysicalCountCommand(1L, 3L, -1, null)));
         count(8);
         when(adjustments.existsByPhysicalCountId(12L)).thenReturn(true);
-        assertThrows(IllegalStateException.class, () -> adjustmentService.handle(
+        assertThrows(PhysicalCountAlreadyAdjustedException.class, () -> adjustmentService.handle(
                 new ApplyStockAdjustmentCommand(1L, 12L, "Reason")));
         verifyNoInteractions(auditCommands, movements);
     }
@@ -213,9 +219,9 @@ class OperationsMonitoringTests {
         count(8);
         pending();
         when(adjustments.existsByPhysicalCountId(12L)).thenReturn(true);
-        assertThrows(IllegalStateException.class, () -> requestService.handle(
+        assertThrows(PhysicalCountAlreadyAdjustedException.class, () -> requestService.handle(
                 new ReviewCorrectionRequestCommand(1L, 15L, CorrectionRequestStatus.APPROVED, null)));
-        assertThrows(IllegalArgumentException.class, () -> requestService.handle(
+        assertThrows(com.bodego.platform.shared.application.security.BusinessAccessDeniedException.class, () -> requestService.handle(
                 new CreateCorrectionRequestCommand(9L, 12L, "Reason")));
         verifyNoInteractions(auditCommands);
         verify(requests, never()).save(any());

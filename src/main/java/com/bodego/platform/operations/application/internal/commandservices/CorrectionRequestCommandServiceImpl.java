@@ -1,5 +1,8 @@
 package com.bodego.platform.operations.application.internal.commandservices;
 
+import com.bodego.platform.shared.application.security.*;
+import com.bodego.platform.operations.domain.exceptions.*;
+
 import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalMonitoringService;
 import com.bodego.platform.operations.domain.model.aggregates.CorrectionRequest;
 import com.bodego.platform.operations.domain.model.commands.ApplyStockAdjustmentCommand;
@@ -18,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CorrectionRequestCommandServiceImpl
         implements CorrectionRequestCommandService {
+    private final BusinessAccess access;
 
     private final CorrectionRequestRepository requestRepository;
     private final PhysicalCountRepository countRepository;
@@ -30,8 +34,8 @@ public class CorrectionRequestCommandServiceImpl
             PhysicalCountRepository countRepository,
             StockAdjustmentRepository adjustmentRepository,
             StockAdjustmentCommandService adjustmentCommandService,
-            ExternalMonitoringService externalMonitoringService
-    ) {
+            ExternalMonitoringService externalMonitoringService, BusinessAccess access) {
+        this.access = access;
         this.requestRepository = requestRepository;
         this.countRepository = countRepository;
         this.adjustmentRepository = adjustmentRepository;
@@ -42,6 +46,9 @@ public class CorrectionRequestCommandServiceImpl
     @Override
     @Transactional
     public Long handle(CreateCorrectionRequestCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.write(BusinessPermission.CORRECTION_CREATE, command.businessId());
+
 
         if (command == null) {
             throw new IllegalArgumentException(
@@ -49,16 +56,12 @@ public class CorrectionRequestCommandServiceImpl
         }
 
         var request = new CorrectionRequest(
-                command.businessId(),
+                actor.businessId(),
                 command.physicalCountId(),
                 command.reason()
         );
 
-        var count = countRepository.findById(
-                request.getPhysicalCountId()
-        ).orElseThrow(() -> new IllegalArgumentException(
-                "Physical count not found"
-        ));
+        var count = countRepository.findWithLockByIdAndBusinessId(request.getPhysicalCountId(), actor.businessId()).orElseThrow(BusinessResourceNotFoundException::new);
 
         if (!count.getBusinessId().equals(request.getBusinessId())) {
             throw new IllegalArgumentException(
@@ -66,21 +69,18 @@ public class CorrectionRequestCommandServiceImpl
         }
 
         if (count.getDifference() == 0) {
-            throw new IllegalStateException(
-                    "Physical count has no stock difference");
+            throw new PhysicalCountWithoutDifferenceException();
         }
 
         if (adjustmentRepository.existsByPhysicalCountId(
                 request.getPhysicalCountId())) {
-            throw new IllegalStateException(
-                    "Physical count has already been adjusted");
+            throw new PhysicalCountAlreadyAdjustedException();
         }
 
         if (requestRepository.existsByPhysicalCountIdAndStatus(
                 request.getPhysicalCountId(),
                 CorrectionRequestStatus.PENDING)) {
-            throw new IllegalStateException(
-                    "A pending correction request already exists");
+            throw new PendingCorrectionRequestAlreadyExistsException();
         }
 
         var savedRequest = requestRepository.save(request);
@@ -96,13 +96,16 @@ public class CorrectionRequestCommandServiceImpl
     @Override
     @Transactional
     public Long handle(ReviewCorrectionRequestCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.write(BusinessPermission.CORRECTION_REVIEW, command.businessId());
+
 
         if (command == null) {
             throw new IllegalArgumentException(
                     "Review command is required");
         }
 
-        if (command.businessId() == null || command.businessId() <= 0
+        if (actor.businessId() == null || actor.businessId() <= 0
                 || command.correctionRequestId() == null
                 || command.correctionRequestId() <= 0) {
             throw new IllegalArgumentException(
@@ -115,20 +118,15 @@ public class CorrectionRequestCommandServiceImpl
                     "Decision must be APPROVED or REJECTED");
         }
 
-        var request = requestRepository.findWithLockById(
-                command.correctionRequestId()
-        ).orElseThrow(() -> new IllegalArgumentException(
-                "Correction request not found"
-        ));
+        var request = requestRepository.findWithLockByIdAndBusinessId(command.correctionRequestId(), actor.businessId()).orElseThrow(BusinessResourceNotFoundException::new);
 
-        if (!request.getBusinessId().equals(command.businessId())) {
+        if (!request.getBusinessId().equals(actor.businessId())) {
             throw new IllegalArgumentException(
                     "Correction request does not belong to the business");
         }
 
         if (request.getStatus() != CorrectionRequestStatus.PENDING) {
-            throw new IllegalStateException(
-                    "Correction request has already been reviewed");
+            throw new CorrectionRequestAlreadyReviewedException();
         }
 
         if (command.decision() == CorrectionRequestStatus.APPROVED) {

@@ -1,5 +1,7 @@
 package com.bodego.platform.operations.application.internal.queryservices;
 
+import com.bodego.platform.shared.application.security.*;
+
 import com.bodego.platform.operations.domain.model.aggregates.PhysicalCount;
 import com.bodego.platform.operations.domain.model.queries.*;
 import com.bodego.platform.operations.domain.services.PhysicalCountQueryService;
@@ -14,32 +16,47 @@ import java.util.Optional;
 @Transactional(readOnly = true)
 public class PhysicalCountQueryServiceImpl
         implements PhysicalCountQueryService {
+    private final BusinessAccess access;
 
     private final PhysicalCountRepository repository;
 
-    public PhysicalCountQueryServiceImpl(PhysicalCountRepository repository) {
+    public PhysicalCountQueryServiceImpl(PhysicalCountRepository repository, BusinessAccess access) {
+        this.access = access;
         this.repository = repository;
     }
 
     @Override
     public List<PhysicalCount> handle(GetAllPhysicalCountsQuery query) {
-        return repository.findAll();
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.OPERATIONS_READ);
+
+        return repository.findByBusinessId(actor.businessId());
     }
 
     @Override
     public Optional<PhysicalCount> handle(GetPhysicalCountByIdQuery query) {
-        return repository.findById(query.id());
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.OPERATIONS_READ);
+
+        return repository.findByIdAndBusinessId(query.id(), actor.businessId());
     }
 
     @Override
     public List<PhysicalCount> handle(
             GetPhysicalCountsByBusinessIdQuery query) {
-        return repository.findByBusinessId(query.businessId());
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.OPERATIONS_READ);
+        BusinessAccess.verifyClaim(actor, query.businessId());
+
+        return repository.findByBusinessId(actor.businessId());
     }
 
     @Override
     public List<PhysicalCount> handle(
             GetPhysicalCountsByLotIdQuery query) {
-        return repository.findByLotId(query.lotId());
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.OPERATIONS_READ);
+
+        return repository.findByBusinessIdAndLotId(actor.businessId(), query.lotId());
     }
 }

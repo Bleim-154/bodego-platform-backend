@@ -32,4 +32,9 @@ public interface LotRepository extends JpaRepository<Lot, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Lot> findWithLockById(Long id);
+
+    java.util.Optional<Lot> findByIdAndBusinessId(Long id, Long businessId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    java.util.Optional<Lot> findWithLockByIdAndBusinessId(Long id, Long businessId);
 }

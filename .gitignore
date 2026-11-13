@@ -31,3 +31,20 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Local secrets ###
+.env
+.env.*
+*.env
+!.env.example
+*.log
+*.dump
+*.backup
+*.pem
+*.key
+.mcp.json
+.codex/
+.agents/
+.npmrc
+.pgpass
+pgpass.conf

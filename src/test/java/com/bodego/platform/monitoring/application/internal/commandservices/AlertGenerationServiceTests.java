@@ -53,7 +53,7 @@ class AlertGenerationServiceTests {
     private final LocalDate today = LocalDate.of(2026, 11, 10);
     private final AlertGenerationServiceImpl service = new AlertGenerationServiceImpl(
             repository, new ExternalCatalogService(catalogFacade, inventoryFacade), new AlertGenerationLock(entityManager),
-            Clock.fixed(Instant.parse("2026-11-10T23:59:00Z"), ZoneOffset.UTC));
+            Clock.fixed(Instant.parse("2026-11-10T23:59:00Z"), ZoneOffset.UTC), com.bodego.platform.shared.application.security.TestBusinessAccess.admin());
 
     private static <T> T proxy(Class<T> type) {
         return mock(type, withSettings().mockMaker(MockMakers.PROXY));

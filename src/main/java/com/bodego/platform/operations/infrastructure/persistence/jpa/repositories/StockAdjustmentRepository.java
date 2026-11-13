@@ -18,4 +18,10 @@ public interface StockAdjustmentRepository
     Optional<StockAdjustment> findByPhysicalCountId(Long physicalCountId);
 
     boolean existsByPhysicalCountId(Long physicalCountId);
+
+    java.util.Optional<StockAdjustment> findByIdAndBusinessId(Long id, Long businessId);
+
+    java.util.List<StockAdjustment> findByLotIdAndBusinessId(Long lotId, Long businessId);
+
+    java.util.Optional<StockAdjustment> findByPhysicalCountIdAndBusinessId(Long physicalCountId, Long businessId);
 }

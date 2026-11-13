@@ -1,5 +1,7 @@
 package com.bodego.platform.monitoring.application.internal.commandservices;
 
+import com.bodego.platform.shared.application.security.*;
+
 import com.bodego.platform.monitoring.application.internal.outboundservices.acl.ExternalCatalogService;
 import com.bodego.platform.monitoring.domain.model.aggregates.Alert;
 import com.bodego.platform.monitoring.domain.model.commands.GenerateAlertsCommand;
@@ -20,6 +22,7 @@ import java.util.List;
 
 @Service
 public class AlertGenerationServiceImpl implements AlertGenerationService {
+    private final BusinessAccess access;
 
     private final AlertRepository alertRepository;
     private final ExternalCatalogService externalCatalogService;
@@ -30,17 +33,16 @@ public class AlertGenerationServiceImpl implements AlertGenerationService {
     public AlertGenerationServiceImpl(
             AlertRepository alertRepository,
             ExternalCatalogService externalCatalogService,
-            AlertGenerationLock generationLock
-    ) {
-        this(alertRepository, externalCatalogService, generationLock, Clock.systemUTC());
+            AlertGenerationLock generationLock, BusinessAccess access) {
+        this(alertRepository, externalCatalogService, generationLock, Clock.systemUTC(), access);
     }
 
     AlertGenerationServiceImpl(
             AlertRepository alertRepository,
             ExternalCatalogService externalCatalogService,
             AlertGenerationLock generationLock,
-            Clock clock
-    ) {
+            Clock clock, BusinessAccess access) {
+        this.access = access;
         this.alertRepository = alertRepository;
         this.externalCatalogService = externalCatalogService;
         this.generationLock = generationLock;
@@ -50,11 +52,11 @@ public class AlertGenerationServiceImpl implements AlertGenerationService {
     @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public List<Alert> handle(GenerateAlertsCommand command) {
-        if (command == null) {
-            throw new IllegalArgumentException("Generate alerts command is required");
-        }
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.write(BusinessPermission.ALERT_MANAGE, command.businessId());
 
-        Long businessId = command.businessId();
+
+        Long businessId = actor.businessId();
         generationLock.acquire(businessId);
         var today = LocalDate.now(clock);
         var generated = new ArrayList<Alert>();

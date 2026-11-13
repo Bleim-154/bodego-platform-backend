@@ -1,5 +1,7 @@
 package com.bodego.platform.operations.application.internal.commandservices;
 
+import com.bodego.platform.shared.application.security.*;
+
 import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalInventoryService;
 import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalMonitoringService;
 import com.bodego.platform.operations.domain.model.aggregates.InventoryMovement;
@@ -12,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class InventoryMovementCommandServiceImpl
         implements InventoryMovementCommandService {
+    private final BusinessAccess access;
 
     private final InventoryMovementRepository movementRepository;
     private final ExternalInventoryService externalCatalogService;
@@ -20,7 +23,8 @@ public class InventoryMovementCommandServiceImpl
     public InventoryMovementCommandServiceImpl(
             InventoryMovementRepository movementRepository,
             ExternalInventoryService externalCatalogService,
-            ExternalMonitoringService externalMonitoringService) {
+            ExternalMonitoringService externalMonitoringService, BusinessAccess access) {
+        this.access = access;
         this.movementRepository = movementRepository;
         this.externalCatalogService = externalCatalogService;
         this.externalMonitoringService = externalMonitoringService;
@@ -29,9 +33,12 @@ public class InventoryMovementCommandServiceImpl
     @Override
     @Transactional
     public Long handle(CreateInventoryMovementCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.write(BusinessPermission.MOVEMENT_REGISTER, command.businessId());
+
 
         var movement = new InventoryMovement(
-                command.businessId(),
+                actor.businessId(),
                 command.lotId(),
                 command.type(),
                 command.quantity(),

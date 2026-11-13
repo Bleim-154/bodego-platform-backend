@@ -70,7 +70,11 @@ public class Lot extends AuditableAbstractAggregateRoot<Lot> {
 
     public Lot increaseQuantity(Integer amount) {
         validatePositiveAmount(amount);
-        this.quantity += amount;
+        try {
+            this.quantity = Math.addExact(this.quantity, amount);
+        } catch (ArithmeticException exception) {
+            throw new IllegalArgumentException("Lot quantity exceeds supported range");
+        }
         return this;
     }
 

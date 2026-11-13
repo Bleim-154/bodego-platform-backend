@@ -8,6 +8,6 @@ import jakarta.validation.constraints.Size;
 public record ApplyStockAdjustmentResource(
         @NotNull @Positive Long businessId,
         @NotNull @Positive Long physicalCountId,
-        @NotBlank @Size(max = 255) String reason
+        @NotBlank @Size(max = 500) String reason
 ) {
 }

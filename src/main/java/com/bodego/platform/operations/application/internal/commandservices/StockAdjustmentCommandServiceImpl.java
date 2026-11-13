@@ -1,5 +1,9 @@
 package com.bodego.platform.operations.application.internal.commandservices;
 
+import com.bodego.platform.shared.application.security.*;
+import com.bodego.platform.operations.domain.exceptions.PhysicalCountAlreadyAdjustedException;
+import com.bodego.platform.operations.domain.exceptions.PhysicalCountWithoutDifferenceException;
+
 import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalInventoryService;
 import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalMonitoringService;
 import com.bodego.platform.operations.domain.model.aggregates.StockAdjustment;
@@ -17,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class StockAdjustmentCommandServiceImpl
         implements StockAdjustmentCommandService {
+    private final BusinessAccess access;
 
     private final StockAdjustmentRepository adjustmentRepository;
     private final PhysicalCountRepository physicalCountRepository;
@@ -29,7 +34,8 @@ public class StockAdjustmentCommandServiceImpl
             PhysicalCountRepository physicalCountRepository,
             InventoryMovementCommandService movementCommandService,
             ExternalInventoryService externalCatalogService,
-            ExternalMonitoringService externalMonitoringService) {
+            ExternalMonitoringService externalMonitoringService, BusinessAccess access) {
+        this.access = access;
 
         this.adjustmentRepository = adjustmentRepository;
         this.physicalCountRepository = physicalCountRepository;
@@ -41,10 +47,13 @@ public class StockAdjustmentCommandServiceImpl
     @Override
     @Transactional
     public Long handle(ApplyStockAdjustmentCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.write(BusinessPermission.STOCK_ADJUSTMENT, command.businessId());
+
 
         if (command == null
-                || command.businessId() == null
-                || command.businessId() <= 0
+                || actor.businessId() == null
+                || actor.businessId() <= 0
                 || command.physicalCountId() == null
                 || command.physicalCountId() <= 0) {
             throw new IllegalArgumentException(
@@ -52,29 +61,25 @@ public class StockAdjustmentCommandServiceImpl
         }
 
         var count = physicalCountRepository
-                .findById(command.physicalCountId())
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "Physical count not found"));
+                .findWithLockByIdAndBusinessId(command.physicalCountId(), actor.businessId())
+                .orElseThrow(BusinessResourceNotFoundException::new);
 
-        if (!count.getBusinessId().equals(command.businessId())) {
+        if (!count.getBusinessId().equals(actor.businessId())) {
             throw new IllegalArgumentException(
                     "Physical count does not belong to the business");
         }
 
         if (count.getDifference() == 0) {
-            throw new IllegalArgumentException(
-                    "Physical count has no stock difference");
+            throw new PhysicalCountWithoutDifferenceException();
         }
 
         if (adjustmentRepository.existsByPhysicalCountId(
                 count.getId())) {
-            throw new IllegalStateException(
-                    "Physical count already has a stock adjustment");
+            throw new PhysicalCountAlreadyAdjustedException();
         }
 
         externalCatalogService.validateLotStock(
-                command.businessId(),
+                actor.businessId(),
                 count.getLotId(),
                 count.getSystemQuantity()
         );
@@ -91,7 +96,7 @@ public class StockAdjustmentCommandServiceImpl
 
         movementCommandService.handle(
                 new CreateInventoryMovementCommand(
-                        command.businessId(),
+                        actor.businessId(),
                         count.getLotId(),
                         type,
                         quantity,
@@ -100,7 +105,7 @@ public class StockAdjustmentCommandServiceImpl
         );
 
         var adjustment = new StockAdjustment(
-                command.businessId(),
+                actor.businessId(),
                 count.getId(),
                 count.getLotId(),
                 count.getSystemQuantity(),

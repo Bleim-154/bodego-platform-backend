@@ -1,5 +1,7 @@
 package com.bodego.platform.strategicoffers.application.internal.commandservices;
 
+import com.bodego.platform.shared.application.security.*;
+
 import com.bodego.platform.strategicoffers.application.internal.outboundservices.acl.ExternalCatalogService;
 import com.bodego.platform.strategicoffers.application.internal.outboundservices.acl.ExternalMonitoringService;
 import com.bodego.platform.strategicoffers.domain.model.aggregates.Recommendation;
@@ -17,6 +19,7 @@ import java.util.*;
 
 @Service
 public class RecommendationCommandServiceImpl implements RecommendationCommandService {
+    private final BusinessAccess access;
 
     private final RecommendationRepository repository;
     private final ExternalCatalogService catalog;
@@ -29,9 +32,8 @@ public class RecommendationCommandServiceImpl implements RecommendationCommandSe
             RecommendationRepository repository,
             ExternalCatalogService catalog,
             RecommendationGenerationLock generationLock,
-            ExternalMonitoringService monitoring
-    ) {
-        this(repository, catalog, generationLock, monitoring, Clock.systemUTC());
+            ExternalMonitoringService monitoring, BusinessAccess access) {
+        this(repository, catalog, generationLock, monitoring, Clock.systemUTC(), access);
     }
 
     RecommendationCommandServiceImpl(
@@ -39,8 +41,8 @@ public class RecommendationCommandServiceImpl implements RecommendationCommandSe
             ExternalCatalogService catalog,
             RecommendationGenerationLock generationLock,
             ExternalMonitoringService monitoring,
-            Clock clock
-    ) {
+            Clock clock, BusinessAccess access) {
+        this.access = access;
         this.repository = repository;
         this.catalog = catalog;
         this.monitoring = monitoring;
@@ -53,11 +55,11 @@ public class RecommendationCommandServiceImpl implements RecommendationCommandSe
     public List<Recommendation> handle(
             GenerateRecommendationsCommand command
     ) {
-        if (command == null) {
-            throw new IllegalArgumentException("Command is required");
-        }
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.write(BusinessPermission.STRATEGIC_OFFERS, command.businessId());
 
-        var businessId = command.businessId();
+
+        var businessId = actor.businessId();
         generationLock.acquire(businessId);
         var evaluatedAt = clock.instant();
         var today = evaluatedAt.atZone(clock.getZone()).toLocalDate();
@@ -100,11 +102,11 @@ public class RecommendationCommandServiceImpl implements RecommendationCommandSe
     public Optional<Recommendation> handle(
             DismissRecommendationCommand command
     ) {
-        if (command == null) {
-            throw new IllegalArgumentException("Command is required");
-        }
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.requireWrite(BusinessPermission.STRATEGIC_OFFERS);
 
-        return repository.findWithLockById(command.recommendationId())
+
+        return repository.findWithLockByIdAndBusinessId(command.recommendationId(), actor.businessId())
                 .map(recommendation -> {
                     if (recommendation.dismiss()) {
                         repository.save(recommendation);

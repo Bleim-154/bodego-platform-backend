@@ -36,7 +36,7 @@ public class StockAdjustment
     @Column(nullable = false)
     private Integer difference;
 
-    @Column(nullable = false, length = 255)
+    @Column(nullable = false, length = 500)
     private String reason;
 
     @Column(nullable = false)
@@ -84,9 +84,9 @@ public class StockAdjustment
         }
 
         if (reason == null || reason.isBlank()
-                || reason.length() > 255) {
+                || reason.length() > 500) {
             throw new IllegalArgumentException(
-                    "Reason must contain between 1 and 255 characters");
+                    "Reason must contain between 1 and 500 characters");
         }
 
         this.businessId = businessId;

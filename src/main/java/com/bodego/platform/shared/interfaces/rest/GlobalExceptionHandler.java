@@ -13,6 +13,18 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(com.bodego.platform.shared.application.security.BusinessAccessDeniedException.class)
+    public ResponseEntity<Map<String,String>> businessAccessDenied() {
+        return ResponseEntity.status(403).body(Map.of("message","Forbidden"));
+    }
+    @ExceptionHandler(com.bodego.platform.shared.application.security.BusinessResourceNotFoundException.class)
+    public ResponseEntity<Map<String,String>> resourceNotFound() {
+        return ResponseEntity.status(404).body(Map.of("message","Resource not found"));
+    }
+    @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+    public ResponseEntity<Map<String,String>> unauthenticated() {
+        return ResponseEntity.status(401).body(Map.of("message","Unauthorized"));
+    }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> handleIllegalArgument(

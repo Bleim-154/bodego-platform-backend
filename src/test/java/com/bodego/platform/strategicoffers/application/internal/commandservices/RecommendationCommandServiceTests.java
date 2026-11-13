@@ -53,7 +53,7 @@ class RecommendationCommandServiceTests {
         }
     };
     final RecommendationCommandServiceImpl service = new RecommendationCommandServiceImpl(repository, catalog,
-            new RecommendationGenerationLock(em), monitoring, Clock.fixed(now, ZoneOffset.UTC));
+            new RecommendationGenerationLock(em), monitoring, Clock.fixed(now, ZoneOffset.UTC), com.bodego.platform.shared.application.security.TestBusinessAccess.admin());
 
     @BeforeEach
     void setup() {
@@ -121,7 +121,7 @@ class RecommendationCommandServiceTests {
     @Test
     void dismissIsIdempotentAndMissingReturnsEmpty() {
         var entity = new Recommendation(1L, 1L, null, RecommendationType.RESTOCK, "Restock", now);
-        when(repository.findWithLockById(1L)).thenReturn(Optional.of(entity));
+        when(repository.findWithLockByIdAndBusinessId(1L, 1L)).thenReturn(Optional.of(entity));
         service.handle(new DismissRecommendationCommand(1L));
         service.handle(new DismissRecommendationCommand(1L));
         verify(repository, times(1)).save(entity);

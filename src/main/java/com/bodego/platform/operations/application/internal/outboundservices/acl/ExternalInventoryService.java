@@ -1,6 +1,8 @@
 package com.bodego.platform.operations.application.internal.outboundservices.acl;
 
 import com.bodego.platform.inventory.interfaces.acl.InventoryContextFacade;
+import com.bodego.platform.inventory.interfaces.acl.exceptions.LotStockValidationConflictException;
+import com.bodego.platform.operations.domain.exceptions.PhysicalCountStockChangedException;
 import com.bodego.platform.operations.domain.model.valueobjects.MovementType;
 import org.springframework.stereotype.Service;
 
@@ -21,7 +23,11 @@ public class ExternalInventoryService {
     }
 
     public void validateLotStock(Long businessId, Long lotId, Integer expectedQuantity) {
-        inventoryContextFacade.validateLotStock(businessId, lotId, expectedQuantity);
+        try {
+            inventoryContextFacade.validateLotStock(businessId, lotId, expectedQuantity);
+        } catch (LotStockValidationConflictException conflict) {
+            throw new PhysicalCountStockChangedException(conflict);
+        }
     }
 
     public Integer getLotQuantity(Long businessId, Long lotId) {

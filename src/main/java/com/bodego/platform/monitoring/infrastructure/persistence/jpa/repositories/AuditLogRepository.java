@@ -21,4 +21,6 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
             @Param("entityType") String entityType,
             @Param("entityId") Long entityId
     );
+
+    java.util.Optional<AuditLog> findByIdAndBusinessId(Long id, Long businessId);
 }

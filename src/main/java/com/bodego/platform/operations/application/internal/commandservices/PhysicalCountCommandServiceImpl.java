@@ -1,5 +1,7 @@
 package com.bodego.platform.operations.application.internal.commandservices;
 
+import com.bodego.platform.shared.application.security.*;
+
 import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalInventoryService;
 import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalMonitoringService;
 import com.bodego.platform.operations.domain.model.aggregates.PhysicalCount;
@@ -12,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PhysicalCountCommandServiceImpl
         implements PhysicalCountCommandService {
+    private final BusinessAccess access;
 
     private final PhysicalCountRepository physicalCountRepository;
     private final ExternalInventoryService externalCatalogService;
@@ -20,7 +23,8 @@ public class PhysicalCountCommandServiceImpl
     public PhysicalCountCommandServiceImpl(
             PhysicalCountRepository physicalCountRepository,
             ExternalInventoryService externalCatalogService,
-            ExternalMonitoringService externalMonitoringService) {
+            ExternalMonitoringService externalMonitoringService, BusinessAccess access) {
+        this.access = access;
         this.physicalCountRepository = physicalCountRepository;
         this.externalCatalogService = externalCatalogService;
         this.externalMonitoringService = externalMonitoringService;
@@ -29,6 +33,9 @@ public class PhysicalCountCommandServiceImpl
     @Override
     @Transactional
     public Long handle(CreatePhysicalCountCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.write(BusinessPermission.COUNT_REGISTER, command.businessId());
+
 
         if (command == null) {
             throw new IllegalArgumentException(
@@ -43,12 +50,12 @@ public class PhysicalCountCommandServiceImpl
 
         Integer systemQuantity =
                 externalCatalogService.getLotQuantity(
-                        command.businessId(),
+                        actor.businessId(),
                         command.lotId()
                 );
 
         var physicalCount = new PhysicalCount(
-                command.businessId(),
+                actor.businessId(),
                 command.lotId(),
                 systemQuantity,
                 command.countedQuantity(),

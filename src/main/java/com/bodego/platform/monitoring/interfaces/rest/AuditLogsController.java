@@ -27,7 +27,7 @@ public class AuditLogsController {
     @GetMapping
     @Operation(summary = "Get audit logs", description = "Optional filters combine with AND. "
             + "Entity type uses exact case-sensitive matching after trimming. "
-            + "Business ID is a filter, not authorization.")
+            + "Business ID must match the authenticated business.")
     public ResponseEntity<List<AuditLogResource>> getAllAuditLogs(
             @Parameter(description = "Business ID, greater than zero")
             @RequestParam(required = false) Long businessId,

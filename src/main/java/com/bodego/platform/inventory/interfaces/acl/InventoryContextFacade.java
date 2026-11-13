@@ -1,6 +1,8 @@
 package com.bodego.platform.inventory.interfaces.acl;
 
 import com.bodego.platform.catalog.interfaces.acl.CatalogContextFacade;
+import com.bodego.platform.inventory.domain.exceptions.LotStockChangedException;
+import com.bodego.platform.inventory.interfaces.acl.exceptions.LotStockValidationConflictException;
 import com.bodego.platform.inventory.domain.model.commands.DecreaseLotQuantityCommand;
 import com.bodego.platform.inventory.domain.model.commands.IncreaseLotQuantityCommand;
 import com.bodego.platform.inventory.domain.model.commands.ValidateLotStockCommand;
@@ -49,6 +51,7 @@ public class InventoryContextFacade {
                 .toList();
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
     public void registerLotMovement(Long businessId, Long lotId, boolean entry, Integer quantity) {
         var lot = lotQueryService.handle(new GetLotByIdQuery(lotId))
                 .orElseThrow(() -> new IllegalArgumentException("Lot not found"));
@@ -64,10 +67,16 @@ public class InventoryContextFacade {
         }
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
     public void validateLotStock(Long businessId, Long lotId, Integer expectedQuantity) {
-        lotCommandService.handle(new ValidateLotStockCommand(businessId, lotId, expectedQuantity));
+        try {
+            lotCommandService.handle(new ValidateLotStockCommand(businessId, lotId, expectedQuantity));
+        } catch (LotStockChangedException conflict) {
+            throw new LotStockValidationConflictException(conflict);
+        }
     }
 
+    @Transactional(readOnly = true)
     public Integer getLotQuantity(Long businessId, Long lotId) {
         if (businessId == null || businessId <= 0 || lotId == null || lotId <= 0) {
             throw new IllegalArgumentException("Business ID and Lot ID must be positive");
@@ -77,6 +86,7 @@ public class InventoryContextFacade {
         if (!lot.getBusinessId().equals(businessId)) {
             throw new IllegalArgumentException("Lot does not belong to the business");
         }
+        catalogContextFacade.getProductById(businessId, lot.getProductId());
         return lot.getQuantity();
     }
 }

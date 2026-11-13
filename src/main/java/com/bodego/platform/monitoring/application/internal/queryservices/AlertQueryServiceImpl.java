@@ -1,5 +1,7 @@
 package com.bodego.platform.monitoring.application.internal.queryservices;
 
+import com.bodego.platform.shared.application.security.*;
+
 import com.bodego.platform.monitoring.domain.model.aggregates.Alert;
 import com.bodego.platform.monitoring.domain.model.queries.GetAlertByIdQuery;
 import com.bodego.platform.monitoring.domain.model.queries.GetAlertsQuery;
@@ -14,28 +16,31 @@ import java.util.Optional;
 @Service
 @Transactional(readOnly = true)
 public class AlertQueryServiceImpl implements AlertQueryService {
+    private final BusinessAccess access;
 
     private final AlertRepository alertRepository;
 
-    public AlertQueryServiceImpl(AlertRepository alertRepository) {
+    public AlertQueryServiceImpl(AlertRepository alertRepository, BusinessAccess access) {
+        this.access = access;
         this.alertRepository = alertRepository;
     }
 
     @Override
     public Optional<Alert> handle(GetAlertByIdQuery query) {
-        if (query == null) {
-            throw new IllegalArgumentException("Alert query is required");
-        }
-        return alertRepository.findById(query.alertId());
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.ALERT_READ);
+
+        return alertRepository.findByIdAndBusinessId(query.alertId(), actor.businessId());
     }
 
     @Override
     public List<Alert> handle(GetAlertsQuery query) {
-        if (query == null) {
-            throw new IllegalArgumentException("Alerts query is required");
-        }
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.ALERT_READ);
+        BusinessAccess.verifyClaim(actor, query.businessId());
+
         return alertRepository.findByFilters(
-                query.businessId(), query.productId(),
+                actor.businessId(), query.productId(),
                 query.lotId(), query.resolved());
     }
 }

@@ -1,5 +1,7 @@
 package com.bodego.platform.operations.application.internal.queryservices;
 
+import com.bodego.platform.shared.application.security.*;
+
 import com.bodego.platform.operations.domain.model.aggregates.CorrectionRequest;
 import com.bodego.platform.operations.domain.model.queries.*;
 import com.bodego.platform.operations.domain.services.CorrectionRequestQueryService;
@@ -15,12 +17,13 @@ import java.util.Optional;
 @Transactional(readOnly = true)
 public class CorrectionRequestQueryServiceImpl
         implements CorrectionRequestQueryService {
+    private final BusinessAccess access;
 
     private final CorrectionRequestRepository repository;
 
     public CorrectionRequestQueryServiceImpl(
-            CorrectionRequestRepository repository
-    ) {
+            CorrectionRequestRepository repository, BusinessAccess access) {
+        this.access = access;
         this.repository = repository;
     }
 
@@ -28,36 +31,53 @@ public class CorrectionRequestQueryServiceImpl
     public List<CorrectionRequest> handle(
             GetAllCorrectionRequestsQuery query
     ) {
-        return repository.findAll();
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.OPERATIONS_READ);
+
+        return repository.findByBusinessId(actor.businessId());
     }
 
     @Override
     public Optional<CorrectionRequest> handle(
             GetCorrectionRequestByIdQuery query
     ) {
-        return repository.findById(query.id());
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.OPERATIONS_READ);
+
+        return repository.findByIdAndBusinessId(query.id(), actor.businessId());
     }
 
     @Override
     public List<CorrectionRequest> handle(
             GetCorrectionRequestsByBusinessIdQuery query
     ) {
-        return repository.findByBusinessId(query.businessId());
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.OPERATIONS_READ);
+        BusinessAccess.verifyClaim(actor, query.businessId());
+
+        return repository.findByBusinessId(actor.businessId());
     }
 
     @Override
     public List<CorrectionRequest> handle(
             GetCorrectionRequestsByPhysicalCountIdQuery query
     ) {
-        return repository.findByPhysicalCountId(query.physicalCountId());
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.OPERATIONS_READ);
+
+        return repository.findByPhysicalCountIdAndBusinessId(query.physicalCountId(), actor.businessId());
     }
 
     @Override
     public List<CorrectionRequest> handle(
             GetCorrectionRequestsByBusinessAndStatusQuery query
     ) {
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.OPERATIONS_READ);
+        BusinessAccess.verifyClaim(actor, query.businessId());
+
         return repository.findByBusinessIdAndStatus(
-                query.businessId(),
+                actor.businessId(),
                 query.status()
         );
     }

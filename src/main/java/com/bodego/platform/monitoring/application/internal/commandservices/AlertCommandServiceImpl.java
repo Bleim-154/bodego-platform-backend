@@ -1,5 +1,7 @@
 package com.bodego.platform.monitoring.application.internal.commandservices;
 
+import com.bodego.platform.shared.application.security.*;
+
 import com.bodego.platform.monitoring.domain.model.aggregates.Alert;
 import com.bodego.platform.monitoring.domain.model.commands.ResolveAlertCommand;
 import com.bodego.platform.monitoring.domain.services.AlertCommandService;
@@ -11,21 +13,23 @@ import java.util.Optional;
 
 @Service
 public class AlertCommandServiceImpl implements AlertCommandService {
+    private final BusinessAccess access;
 
     private final AlertRepository alertRepository;
 
-    public AlertCommandServiceImpl(AlertRepository alertRepository) {
+    public AlertCommandServiceImpl(AlertRepository alertRepository, BusinessAccess access) {
+        this.access = access;
         this.alertRepository = alertRepository;
     }
 
     @Override
     @Transactional
     public Optional<Alert> handle(ResolveAlertCommand command) {
-        if (command == null) {
-            throw new IllegalArgumentException("Resolve alert command is required");
-        }
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.requireWrite(BusinessPermission.ALERT_MANAGE);
 
-        return alertRepository.findWithLockById(command.alertId())
+
+        return alertRepository.findWithLockByIdAndBusinessId(command.alertId(), actor.businessId())
                 .map(alert -> {
                     if (Boolean.TRUE.equals(alert.getResolved())) {
                         return alert;

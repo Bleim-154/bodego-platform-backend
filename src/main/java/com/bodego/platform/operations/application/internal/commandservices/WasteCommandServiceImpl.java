@@ -1,5 +1,7 @@
 package com.bodego.platform.operations.application.internal.commandservices;
 
+import com.bodego.platform.shared.application.security.*;
+
 import com.bodego.platform.operations.application.internal.outboundservices.acl.ExternalMonitoringService;
 import com.bodego.platform.operations.domain.model.aggregates.Waste;
 import com.bodego.platform.operations.domain.model.commands.CreateInventoryMovementCommand;
@@ -14,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class WasteCommandServiceImpl implements WasteCommandService {
+    private final BusinessAccess access;
 
     private final WasteRepository wasteRepository;
     private final InventoryMovementCommandService movementCommandService;
@@ -22,7 +25,8 @@ public class WasteCommandServiceImpl implements WasteCommandService {
     public WasteCommandServiceImpl(
             WasteRepository wasteRepository,
             InventoryMovementCommandService movementCommandService,
-            ExternalMonitoringService externalMonitoringService) {
+            ExternalMonitoringService externalMonitoringService, BusinessAccess access) {
+        this.access = access;
         this.wasteRepository = wasteRepository;
         this.movementCommandService = movementCommandService;
         this.externalMonitoringService = externalMonitoringService;
@@ -31,6 +35,9 @@ public class WasteCommandServiceImpl implements WasteCommandService {
     @Override
     @Transactional
     public Long handle(RegisterWasteCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.write(BusinessPermission.WASTE_REGISTER, command.businessId());
+
 
         if (command == null) {
             throw new IllegalArgumentException(
@@ -38,7 +45,7 @@ public class WasteCommandServiceImpl implements WasteCommandService {
         }
 
         var waste = new Waste(
-                command.businessId(),
+                actor.businessId(),
                 command.lotId(),
                 command.quantity(),
                 command.reason(),

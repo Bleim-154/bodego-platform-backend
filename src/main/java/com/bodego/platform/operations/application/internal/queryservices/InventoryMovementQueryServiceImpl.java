@@ -1,5 +1,7 @@
 package com.bodego.platform.operations.application.internal.queryservices;
 
+import com.bodego.platform.shared.application.security.*;
+
 import com.bodego.platform.operations.domain.model.aggregates.InventoryMovement;
 import com.bodego.platform.operations.domain.model.queries.*;
 import com.bodego.platform.operations.domain.services.InventoryMovementQueryService;
@@ -14,35 +16,50 @@ import java.util.Optional;
 @Transactional(readOnly = true)
 public class InventoryMovementQueryServiceImpl
         implements InventoryMovementQueryService {
+    private final BusinessAccess access;
 
     private final InventoryMovementRepository repository;
 
     public InventoryMovementQueryServiceImpl(
-            InventoryMovementRepository repository) {
+            InventoryMovementRepository repository, BusinessAccess access) {
+        this.access = access;
         this.repository = repository;
     }
 
     @Override
     public List<InventoryMovement> handle(
             GetAllInventoryMovementsQuery query) {
-        return repository.findAll();
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.OPERATIONS_READ);
+
+        return repository.findByBusinessId(actor.businessId());
     }
 
     @Override
     public Optional<InventoryMovement> handle(
             GetInventoryMovementByIdQuery query) {
-        return repository.findById(query.id());
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.OPERATIONS_READ);
+
+        return repository.findByIdAndBusinessId(query.id(), actor.businessId());
     }
 
     @Override
     public List<InventoryMovement> handle(
             GetInventoryMovementsByBusinessIdQuery query) {
-        return repository.findByBusinessId(query.businessId());
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.OPERATIONS_READ);
+        BusinessAccess.verifyClaim(actor, query.businessId());
+
+        return repository.findByBusinessId(actor.businessId());
     }
 
     @Override
     public List<InventoryMovement> handle(
             GetInventoryMovementsByLotIdQuery query) {
-        return repository.findByLotId(query.lotId());
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.OPERATIONS_READ);
+
+        return repository.findByLotIdAndBusinessId(query.lotId(), actor.businessId());
     }
 }

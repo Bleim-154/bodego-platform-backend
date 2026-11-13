@@ -1,5 +1,7 @@
 package com.bodego.platform.catalog.application.internal.commandservices;
 
+import com.bodego.platform.shared.application.security.*;
+
 import com.bodego.platform.catalog.domain.exceptions.CategoryAlreadyExistsException;
 import com.bodego.platform.catalog.domain.model.aggregates.Category;
 import com.bodego.platform.catalog.domain.model.commands.CreateCategoryCommand;
@@ -16,6 +18,7 @@ import java.util.Optional;
 
 @Service
 public class CategoryCommandServiceImpl implements CategoryCommandService {
+    private final BusinessAccess access;
 
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
@@ -23,8 +26,8 @@ public class CategoryCommandServiceImpl implements CategoryCommandService {
 
     public CategoryCommandServiceImpl(
             CategoryRepository categoryRepository,
-            ProductRepository productRepository
-    ) {
+            ProductRepository productRepository, BusinessAccess access) {
+        this.access = access;
         this.categoryRepository = categoryRepository;
         this.productRepository = productRepository;
     }
@@ -32,6 +35,9 @@ public class CategoryCommandServiceImpl implements CategoryCommandService {
     @Override
     @Transactional
     public Long handle(CreateCategoryCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.write(BusinessPermission.CATALOG_MANAGE, command.businessId());
+
 
         var name = command.name();
 
@@ -40,14 +46,14 @@ public class CategoryCommandServiceImpl implements CategoryCommandService {
         }
 
         if (categoryRepository.existsByBusinessIdAndNameIgnoreCase(
-                command.businessId(), name.trim())) {
+                actor.businessId(), name.trim())) {
             throw new CategoryAlreadyExistsException(
                     "Category already exists in this business"
             );
         }
 
         var category = new Category(
-                command.businessId(),
+                actor.businessId(),
                 name,
                 command.description()
         );
@@ -58,11 +64,12 @@ public class CategoryCommandServiceImpl implements CategoryCommandService {
     @Override
     @Transactional
     public Optional<Category> handle(UpdateCategoryCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.requireWrite(BusinessPermission.CATALOG_MANAGE);
 
-        var category = categoryRepository.findById(command.categoryId())
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Category not found"
-                ));
+
+        var category = categoryRepository.findByIdAndBusinessId(command.categoryId(), actor.businessId())
+                .orElseThrow(BusinessResourceNotFoundException::new);
 
         var name = command.name();
 
@@ -87,11 +94,12 @@ public class CategoryCommandServiceImpl implements CategoryCommandService {
     @Override
     @Transactional
     public void handle(DeleteCategoryCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.requireWrite(BusinessPermission.DENIED);
 
-        var category = categoryRepository.findById(command.categoryId())
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Category not found"
-                ));
+
+        var category = categoryRepository.findByIdAndBusinessId(command.categoryId(), actor.businessId())
+                .orElseThrow(BusinessResourceNotFoundException::new);
 
         if (productRepository.existsByCategoryId(category.getId())) {
             throw new CategoryHasProductsException(

@@ -27,4 +27,9 @@ public interface OfferRepository extends JpaRepository<Offer, Long> {
             @Param("productId") Long productId,
             @Param("active") Boolean active
     );
+
+    java.util.Optional<Offer> findByIdAndBusinessId(Long id, Long businessId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    java.util.Optional<Offer> findWithLockByIdAndBusinessId(Long id, Long businessId);
 }

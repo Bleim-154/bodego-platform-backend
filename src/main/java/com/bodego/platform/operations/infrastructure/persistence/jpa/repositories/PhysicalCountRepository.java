@@ -9,6 +9,8 @@ import java.util.List;
 @Repository
 public interface PhysicalCountRepository
         extends JpaRepository<PhysicalCount, Long> {
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    java.util.Optional<PhysicalCount> findWithLockByIdAndBusinessId(Long id,Long businessId);
 
     List<PhysicalCount> findByBusinessId(Long businessId);
 
@@ -18,4 +20,6 @@ public interface PhysicalCountRepository
             Long businessId,
             Long lotId
     );
+
+    java.util.Optional<PhysicalCount> findByIdAndBusinessId(Long id, Long businessId);
 }

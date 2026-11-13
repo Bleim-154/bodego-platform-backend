@@ -1,5 +1,7 @@
 package com.bodego.platform.catalog.application.internal.commandservices;
 
+import com.bodego.platform.shared.application.security.*;
+
 import com.bodego.platform.catalog.domain.model.aggregates.Product;
 import com.bodego.platform.catalog.domain.model.commands.*;
 import com.bodego.platform.catalog.domain.services.ProductCommandService;
@@ -14,14 +16,15 @@ import java.util.Optional;
 
 @Service
 public class ProductCommandServiceImpl implements ProductCommandService {
+    private final BusinessAccess access;
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
 
     public ProductCommandServiceImpl(
             ProductRepository productRepository,
-            CategoryRepository categoryRepository
-    ) {
+            CategoryRepository categoryRepository, BusinessAccess access) {
+        this.access = access;
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
     }
@@ -29,17 +32,20 @@ public class ProductCommandServiceImpl implements ProductCommandService {
     @Override
     @Transactional
     public Long handle(CreateProductCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.write(BusinessPermission.CATALOG_MANAGE, command.businessId());
 
-        validateCategory(command.categoryId(), command.businessId());
+
+        validateCategory(command.categoryId(), actor.businessId());
 
         validateDuplicateName(
-                command.businessId(),
+                actor.businessId(),
                 command.name(),
                 null
         );
 
         var product = new Product(
-                command.businessId(),
+                actor.businessId(),
                 command.categoryId(),
                 command.name(),
                 command.description(),
@@ -53,10 +59,11 @@ public class ProductCommandServiceImpl implements ProductCommandService {
     @Override
     @Transactional
     public Optional<Product> handle(UpdateProductCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.requireWrite(BusinessPermission.CATALOG_MANAGE);
 
-        var optionalProduct = productRepository.findById(
-                command.productId()
-        );
+
+        var optionalProduct = productRepository.findByIdAndBusinessId(command.productId(), actor.businessId());
 
         if (optionalProduct.isEmpty()) {
             return Optional.empty();
@@ -89,8 +96,11 @@ public class ProductCommandServiceImpl implements ProductCommandService {
     @Override
     @Transactional
     public Optional<Product> handle(ActivateProductCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.requireWrite(BusinessPermission.CATALOG_MANAGE);
 
-        return productRepository.findById(command.productId())
+
+        return productRepository.findByIdAndBusinessId(command.productId(), actor.businessId())
                 .map(product -> {
                     product.activate();
                     return productRepository.save(product);
@@ -100,8 +110,11 @@ public class ProductCommandServiceImpl implements ProductCommandService {
     @Override
     @Transactional
     public Optional<Product> handle(DeactivateProductCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.requireWrite(BusinessPermission.CATALOG_MANAGE);
 
-        return productRepository.findById(command.productId())
+
+        return productRepository.findByIdAndBusinessId(command.productId(), actor.businessId())
                 .map(product -> {
                     product.deactivate();
                     return productRepository.save(product);

@@ -17,8 +17,9 @@ public class MonitoringContextFacade {
 
     /**
      * Records a successful business action in the caller's transaction.
-     * The caller supplies validated business/entity references and a trusted user ID,
-     * or null while IAM is unavailable. This method does not authorize the caller.
+     * The caller supplies validated entity references. The application command service
+     * checks the tenant and derives the actual user from CurrentIdentity; the legacy
+     * userId parameter cannot select the persisted audit actor.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public Long recordAction(

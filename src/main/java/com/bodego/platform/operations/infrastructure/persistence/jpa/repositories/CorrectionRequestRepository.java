@@ -38,4 +38,11 @@ public interface CorrectionRequestRepository
             WHERE request.id = :id
             """)
     Optional<CorrectionRequest> findWithLockById(@Param("id") Long id);
+
+    java.util.Optional<CorrectionRequest> findByIdAndBusinessId(Long id, Long businessId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    java.util.Optional<CorrectionRequest> findWithLockByIdAndBusinessId(Long id, Long businessId);
+
+    java.util.List<CorrectionRequest> findByPhysicalCountIdAndBusinessId(Long physicalCountId, Long businessId);
 }

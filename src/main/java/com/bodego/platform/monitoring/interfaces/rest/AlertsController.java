@@ -41,7 +41,7 @@ public class AlertsController {
     @PostMapping("/generate")
     @Operation(summary = "Generate inventory alerts", description = "Evaluates a business using UTC dates. "
             + "Returns only newly generated alerts; repeated requests without changes return an empty list. "
-            + "Business ID is not authorization. Expiration includes today through today + 7 days.")
+            + "Business ID must match the authenticated business. Expiration includes today through today + 7 days.")
     public ResponseEntity<List<AlertResource>> generateAlerts(
             @Valid @RequestBody GenerateAlertsResource resource
     ) {
@@ -54,7 +54,7 @@ public class AlertsController {
 
     @GetMapping
     @Operation(summary = "Get alerts", description = "Optional filters combine with AND. "
-            + "Omitted filters do not restrict results. Business ID is a filter, not authorization.")
+            + "Omitted filters only include the authenticated business. Business ID must match the authenticated business.")
     public ResponseEntity<List<AlertResource>> getAllAlerts(
             @Parameter(description = "Business ID, greater than zero")
             @RequestParam(required = false) Long businessId,

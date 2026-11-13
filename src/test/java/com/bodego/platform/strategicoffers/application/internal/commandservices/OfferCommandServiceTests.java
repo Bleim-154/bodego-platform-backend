@@ -35,14 +35,14 @@ class OfferCommandServiceTests {
             }
         }
     };
-    final OfferCommandServiceImpl service = new OfferCommandServiceImpl(repository, catalog, monitoring);
+    final OfferCommandServiceImpl service = new OfferCommandServiceImpl(repository, catalog, monitoring, com.bodego.platform.shared.application.security.TestBusinessAccess.admin());
     final LocalDate today = LocalDate.of(2026, 11, 10);
     final Offer offer = new Offer(1L, 2L, "Promo", new BigDecimal("10.25"), today, today.plusDays(5));
 
     @BeforeEach
     void setup() {
         ReflectionTestUtils.setField(offer, "id", 1L);
-        when(repository.findWithLockById(1L)).thenReturn(Optional.of(offer));
+        when(repository.findWithLockByIdAndBusinessId(1L, 1L)).thenReturn(Optional.of(offer));
         when(repository.save(any(Offer.class))).thenAnswer(i -> {
             Offer saved = i.getArgument(0);
             ReflectionTestUtils.setField(saved, "id", 1L);
@@ -62,7 +62,7 @@ class OfferCommandServiceTests {
         productActive = false;
         assertThrows(IllegalArgumentException.class, () -> service.handle(new CreateOfferCommand(1L, 2L, "Promo", BigDecimal.TEN, today, today)));
         productActive = true;
-        assertThrows(IllegalArgumentException.class, () -> service.handle(new CreateOfferCommand(2L, 2L, "Promo", BigDecimal.TEN, today, today)));
+        assertThrows(com.bodego.platform.shared.application.security.BusinessAccessDeniedException.class, () -> service.handle(new CreateOfferCommand(2L, 2L, "Promo", BigDecimal.TEN, today, today)));
         verify(repository, never()).save(any());
     }
 

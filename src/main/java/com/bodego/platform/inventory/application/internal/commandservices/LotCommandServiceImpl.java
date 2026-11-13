@@ -1,11 +1,16 @@
 package com.bodego.platform.inventory.application.internal.commandservices;
 
+import com.bodego.platform.shared.application.security.*;
+
 import com.bodego.platform.inventory.domain.model.aggregates.Lot;
+import com.bodego.platform.inventory.domain.exceptions.LotStockChangedException;
 import com.bodego.platform.inventory.domain.model.commands.*;
 import com.bodego.platform.inventory.domain.services.LotCommandService;
 import com.bodego.platform.inventory.infrastructure.persistence.jpa.repositories.LotRepository;
 import com.bodego.platform.catalog.interfaces.acl.CatalogContextFacade;
 import com.bodego.platform.catalog.interfaces.acl.resources.ProductInventorySnapshot;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -15,21 +20,27 @@ import java.util.Optional;
 
 @Service
 public class LotCommandServiceImpl implements LotCommandService {
+    private final BusinessAccess access;
 
     private final LotRepository lotRepository;
     private final CatalogContextFacade catalogContextFacade;
+    private final EntityManager entityManager;
 
     public LotCommandServiceImpl(
             LotRepository lotRepository,
-            CatalogContextFacade catalogContextFacade
-    ) {
+            CatalogContextFacade catalogContextFacade, BusinessAccess access, EntityManager entityManager) {
+        this.access = access;
         this.lotRepository = lotRepository;
         this.catalogContextFacade = catalogContextFacade;
+        this.entityManager = entityManager;
     }
 
     @Override
     @Transactional
     public Long handle(CreateLotCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.write(BusinessPermission.INVENTORY_MANAGE, command.businessId());
+
 
         if (command.quantity() == null || command.quantity() != 0) {
             throw new IllegalArgumentException(
@@ -37,16 +48,16 @@ public class LotCommandServiceImpl implements LotCommandService {
             );
         }
 
-        validateProduct(command.productId(), command.businessId());
+        validateProduct(command.productId(), actor.businessId());
 
         validateDuplicateBatch(
-                command.businessId(),
+                actor.businessId(),
                 command.batchNumber(),
                 null
         );
 
         var lot = new Lot(
-                command.businessId(),
+                actor.businessId(),
                 command.productId(),
                 command.batchNumber(),
                 command.quantity(),
@@ -59,12 +70,17 @@ public class LotCommandServiceImpl implements LotCommandService {
     @Override
     @Transactional
     public Optional<Lot> handle(UpdateLotCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.requireWrite(BusinessPermission.INVENTORY_MANAGE);
 
-        var lot = lotRepository.findWithLockById(command.lotId());
+
+        var lot = lockFreshLot(command.lotId(), actor.businessId());
 
         if (lot.isEmpty()) {
             return Optional.empty();
         }
+
+        catalogContextFacade.getProductById(actor.businessId(), lot.get().getProductId());
 
         validateDuplicateBatch(
                 lot.get().getBusinessId(),
@@ -81,14 +97,19 @@ public class LotCommandServiceImpl implements LotCommandService {
     }
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Lot> handle(IncreaseLotQuantityCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.requireWrite(BusinessPermission.MOVEMENT_REGISTER);
 
-        var lot = lotRepository.findWithLockById(command.lotId());
+
+        var lot = lockFreshLot(command.lotId(), actor.businessId());
 
         if (lot.isEmpty()) {
             return Optional.empty();
         }
+
+        catalogContextFacade.getProductById(actor.businessId(), lot.get().getProductId());
 
         lot.get().increaseQuantity(command.amount());
 
@@ -96,14 +117,19 @@ public class LotCommandServiceImpl implements LotCommandService {
     }
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Lot> handle(DecreaseLotQuantityCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.requireWrite(BusinessPermission.MOVEMENT_REGISTER);
 
-        var lot = lotRepository.findWithLockById(command.lotId());
+
+        var lot = lockFreshLot(command.lotId(), actor.businessId());
 
         if (lot.isEmpty()) {
             return Optional.empty();
         }
+
+        catalogContextFacade.getProductById(actor.businessId(), lot.get().getProductId());
 
         lot.get().decreaseQuantity(command.amount());
 
@@ -113,10 +139,13 @@ public class LotCommandServiceImpl implements LotCommandService {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void handle(ValidateLotStockCommand command) {
+        if (command == null) throw new IllegalArgumentException("Command is required");
+        var actor = access.write(BusinessPermission.STOCK_ADJUSTMENT, command.businessId());
+
 
         if (command == null
-                || command.businessId() == null
-                || command.businessId() <= 0
+                || actor.businessId() == null
+                || actor.businessId() <= 0
                 || command.lotId() == null
                 || command.lotId() <= 0
                 || command.expectedQuantity() == null
@@ -125,19 +154,28 @@ public class LotCommandServiceImpl implements LotCommandService {
                     "Invalid lot stock validation command");
         }
 
-        var lot = lotRepository.findWithLockById(command.lotId())
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Lot not found"));
+        var lot = lockFreshLot(command.lotId(), actor.businessId())
+                .orElseThrow(BusinessResourceNotFoundException::new);
 
-        if (!lot.getBusinessId().equals(command.businessId())) {
+        catalogContextFacade.getProductById(actor.businessId(), lot.getProductId());
+
+        if (!lot.getBusinessId().equals(actor.businessId())) {
             throw new IllegalArgumentException(
                     "Lot does not belong to the business");
         }
 
         if (!lot.getQuantity().equals(command.expectedQuantity())) {
-            throw new IllegalStateException(
-                    "Lot stock has changed since the physical count");
+            throw new LotStockChangedException();
         }
+    }
+
+    private Optional<Lot> lockFreshLot(Long lotId, Long businessId) {
+        var lot = lotRepository.findWithLockByIdAndBusinessId(lotId, businessId);
+        // A prior ACL read can have cached the entity before another transaction
+        // committed. Acquiring a query lock alone does not refresh that state.
+        // Refresh only this already tenant-scoped row while retaining its write lock.
+        lot.ifPresent(current -> entityManager.refresh(current, LockModeType.PESSIMISTIC_WRITE));
+        return lot;
     }
 
     private void validateProduct(Long productId, Long businessId) {

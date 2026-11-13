@@ -23,7 +23,8 @@ class LotCommandServiceTests {
     private final LotRepository lots = mock(LotRepository.class, withSettings().mockMaker(MockMakers.PROXY));
     private final ProductQueryService products = mock(ProductQueryService.class, withSettings().mockMaker(MockMakers.PROXY));
     private final CatalogContextFacade catalog = new CatalogContextFacade(products);
-    private final LotCommandServiceImpl service = new LotCommandServiceImpl(lots, catalog);
+    private final jakarta.persistence.EntityManager entityManager = mock(jakarta.persistence.EntityManager.class, withSettings().mockMaker(MockMakers.PROXY));
+    private final LotCommandServiceImpl service = new LotCommandServiceImpl(lots, catalog, com.bodego.platform.shared.application.security.TestBusinessAccess.admin(), entityManager);
 
     @Test
     void createsZeroQuantityLotAfterCatalogConfirmsActiveProductOwnership() {

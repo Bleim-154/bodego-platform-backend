@@ -17,4 +17,6 @@ public interface WasteRepository extends JpaRepository<Waste, Long> {
             Long businessId,
             Long lotId
     );
+
+    java.util.Optional<Waste> findByIdAndBusinessId(Long id, Long businessId);
 }

@@ -15,7 +15,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/offers")
-@Tag(name = "Offers", description = "Commercial offers. Business ID is not authorization; IAM pending.")
+@Tag(name = "Offers", description = "Commercial offers. JWT required; business scope comes from the authenticated identity.")
 public class OffersController {
 
     private final OfferCommandService commands;
@@ -42,7 +42,7 @@ public class OffersController {
     }
 
     @GetMapping
-    @Operation(summary = "List offers", description = "Optional filters combine with AND. active is the stored flag; effective validity also requires startDate <= evaluation date <= endDate. Business ID is not authorization.")
+    @Operation(summary = "List offers", description = "Optional filters combine with AND. active is the stored flag; effective validity also requires startDate <= evaluation date <= endDate. Business ID must match the authenticated business.")
     public ResponseEntity<List<OfferResource>> getAll(
             @RequestParam(required = false) Long businessId,
             @RequestParam(required = false) Long productId,

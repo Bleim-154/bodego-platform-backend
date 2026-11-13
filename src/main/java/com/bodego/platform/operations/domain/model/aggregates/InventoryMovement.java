@@ -24,7 +24,7 @@ public class InventoryMovement
     @Column(nullable = false)
     private Integer quantity;
 
-    @Column(nullable = false, length = 255)
+    @Column(nullable = false, length = 500)
     private String reason;
 
     protected InventoryMovement() {
@@ -58,9 +58,9 @@ public class InventoryMovement
         }
 
         if (reason == null || reason.isBlank()
-                || reason.length() > 255) {
+                || reason.length() > 500) {
             throw new IllegalArgumentException(
-                    "Movement reason must contain between 1 and 255 characters");
+                    "Movement reason must contain between 1 and 500 characters");
         }
 
         this.businessId = businessId;

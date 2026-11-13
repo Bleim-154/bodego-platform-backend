@@ -22,14 +22,14 @@ class AlertServicesTests {
 
     private final AlertRepository repository = mock(
             AlertRepository.class, withSettings().mockMaker(MockMakers.PROXY));
-    private final AlertCommandServiceImpl commandService = new AlertCommandServiceImpl(repository);
-    private final AlertQueryServiceImpl queryService = new AlertQueryServiceImpl(repository);
+    private final AlertCommandServiceImpl commandService = new AlertCommandServiceImpl(repository, com.bodego.platform.shared.application.security.TestBusinessAccess.admin());
+    private final AlertQueryServiceImpl queryService = new AlertQueryServiceImpl(repository, com.bodego.platform.shared.application.security.TestBusinessAccess.admin());
 
     @Test
     void resolutionUsesLockedLookupAndSavesOnlyFirstTransition() {
         var alert = new Alert(1L, 2L, null,
                 AlertType.LOW_STOCK, AlertSeverity.MEDIUM, "Stock");
-        when(repository.findWithLockById(4L)).thenReturn(Optional.of(alert));
+        when(repository.findWithLockByIdAndBusinessId(4L, 1L)).thenReturn(Optional.of(alert));
         when(repository.save(alert)).thenReturn(alert);
 
         assertSame(alert, commandService.handle(new ResolveAlertCommand(4L)).orElseThrow());
@@ -37,16 +37,16 @@ class AlertServicesTests {
         assertSame(alert, commandService.handle(new ResolveAlertCommand(4L)).orElseThrow());
 
         assertEquals(resolvedAt, alert.getResolvedAt());
-        verify(repository, times(2)).findWithLockById(4L);
+        verify(repository, times(2)).findWithLockByIdAndBusinessId(4L, 1L);
         verify(repository, times(1)).save(alert);
         verifyNoMoreInteractions(repository);
     }
 
     @Test
     void missingAlertDoesNotWrite() {
-        when(repository.findWithLockById(4L)).thenReturn(Optional.empty());
+        when(repository.findWithLockByIdAndBusinessId(4L, 1L)).thenReturn(Optional.empty());
         assertTrue(commandService.handle(new ResolveAlertCommand(4L)).isEmpty());
-        verify(repository).findWithLockById(4L);
+        verify(repository).findWithLockByIdAndBusinessId(4L, 1L);
         verifyNoMoreInteractions(repository);
     }
 
@@ -59,8 +59,8 @@ class AlertServicesTests {
 
     @Test
     void unfilteredQueryAndMissingIdReturnRepositoryResults() {
-        when(repository.findByFilters(null, null, null, null)).thenReturn(List.of());
-        when(repository.findById(4L)).thenReturn(Optional.empty());
+        when(repository.findByFilters(1L, null, null, null)).thenReturn(List.of());
+        when(repository.findByIdAndBusinessId(4L, 1L)).thenReturn(Optional.empty());
         assertTrue(queryService.handle(new GetAlertsQuery(null, null, null, null)).isEmpty());
         assertTrue(queryService.handle(new GetAlertByIdQuery(4L)).isEmpty());
     }

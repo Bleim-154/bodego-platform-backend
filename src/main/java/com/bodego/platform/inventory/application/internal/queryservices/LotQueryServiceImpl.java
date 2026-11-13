@@ -1,5 +1,7 @@
 package com.bodego.platform.inventory.application.internal.queryservices;
 
+import com.bodego.platform.shared.application.security.*;
+
 import com.bodego.platform.inventory.domain.model.aggregates.Lot;
 import com.bodego.platform.inventory.domain.model.queries.*;
 import com.bodego.platform.inventory.domain.services.LotQueryService;
@@ -14,30 +16,45 @@ import java.util.Optional;
 @Service
 @Transactional(readOnly = true)
 public class LotQueryServiceImpl implements LotQueryService {
+    private final BusinessAccess access;
 
     private final LotRepository lotRepository;
 
-    public LotQueryServiceImpl(LotRepository lotRepository) {
+    public LotQueryServiceImpl(LotRepository lotRepository, BusinessAccess access) {
+        this.access = access;
         this.lotRepository = lotRepository;
     }
 
     @Override
     public List<Lot> handle(GetAllLotsQuery query) {
-        return lotRepository.findAll();
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.INVENTORY_READ);
+
+        return lotRepository.findByBusinessId(actor.businessId());
     }
 
     @Override
     public Optional<Lot> handle(GetLotByIdQuery query) {
-        return lotRepository.findById(query.lotId());
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.INVENTORY_READ);
+
+        return lotRepository.findByIdAndBusinessId(query.lotId(), actor.businessId());
     }
 
     @Override
     public List<Lot> handle(GetLotsByProductIdQuery query) {
-        return lotRepository.findByProductId(query.productId());
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.INVENTORY_READ);
+
+        return lotRepository.findByProductIdAndBusinessId(query.productId(), actor.businessId());
     }
 
     @Override
     public List<Lot> handle(GetLotsByBusinessIdQuery query) {
-        return lotRepository.findByBusinessId(query.businessId());
+        if (query == null) throw new IllegalArgumentException("Query is required");
+        var actor = access.require(BusinessPermission.INVENTORY_READ);
+        BusinessAccess.verifyClaim(actor, query.businessId());
+
+        return lotRepository.findByBusinessId(actor.businessId());
     }
 }

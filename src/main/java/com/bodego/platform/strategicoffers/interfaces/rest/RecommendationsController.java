@@ -16,7 +16,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/recommendations")
-@Tag(name = "Recommendations", description = "Strategic inventory recommendations. Business ID is not authorization; IAM pending.")
+@Tag(name = "Recommendations", description = "Strategic inventory recommendations. JWT required; business scope comes from the authenticated identity.")
 public class RecommendationsController {
 
     private final RecommendationCommandService commands;
@@ -42,7 +42,7 @@ public class RecommendationsController {
     }
 
     @GetMapping
-    @Operation(summary = "List recommendations", description = "Optional filters combine with AND. Business ID is a filter, not authorization.")
+    @Operation(summary = "List recommendations", description = "Optional filters combine with AND. Business ID must match the authenticated business.")
     public ResponseEntity<List<RecommendationResource>> getAll(
             @RequestParam(required = false) Long businessId,
             @RequestParam(required = false) Long productId,

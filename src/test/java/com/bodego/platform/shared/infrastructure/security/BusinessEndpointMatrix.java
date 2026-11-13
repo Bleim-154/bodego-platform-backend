@@ -1,0 +1,56 @@
+package com.bodego.platform.shared.infrastructure.security;
+
+import java.util.List;
+
+final class BusinessEndpointMatrix {
+    record Route(String method,String path,boolean admin,boolean employee) {}
+    static final List<Route> ROUTES=List.of(
+        new Route("POST","/api/v1/categories",true,false),
+        new Route("GET","/api/v1/categories",true,true),
+        new Route("GET","/api/v1/categories/{id}",true,true),
+        new Route("PUT","/api/v1/categories/{id}",true,false),
+        new Route("DELETE","/api/v1/categories/{id}",false,false),
+        new Route("POST","/api/v1/products",true,false),
+        new Route("GET","/api/v1/products",true,true),
+        new Route("GET","/api/v1/products/{id}",true,true),
+        new Route("PUT","/api/v1/products/{id}",true,false),
+        new Route("PATCH","/api/v1/products/{id}/activate",true,false),
+        new Route("PATCH","/api/v1/products/{id}/deactivate",true,false),
+        new Route("POST","/api/v1/lots",true,false),
+        new Route("GET","/api/v1/lots",true,true),
+        new Route("GET","/api/v1/lots/{id}",true,true),
+        new Route("PUT","/api/v1/lots/{id}",true,false),
+        new Route("POST","/api/v1/correction-requests",true,true),
+        new Route("PATCH","/api/v1/correction-requests/{id}/review",true,false),
+        new Route("GET","/api/v1/correction-requests/{id}",true,true),
+        new Route("GET","/api/v1/correction-requests",true,true),
+        new Route("POST","/api/v1/inventory-movements",true,true),
+        new Route("GET","/api/v1/inventory-movements/{id}",true,true),
+        new Route("GET","/api/v1/inventory-movements",true,true),
+        new Route("POST","/api/v1/physical-counts",true,true),
+        new Route("GET","/api/v1/physical-counts/{id}",true,true),
+        new Route("GET","/api/v1/physical-counts",true,true),
+        new Route("POST","/api/v1/stock-adjustments",true,false),
+        new Route("GET","/api/v1/stock-adjustments/{id}",true,false),
+        new Route("GET","/api/v1/stock-adjustments",true,false),
+        new Route("POST","/api/v1/wastes",true,true),
+        new Route("GET","/api/v1/wastes/{id}",true,true),
+        new Route("GET","/api/v1/wastes",true,true),
+        new Route("POST","/api/v1/alerts/generate",true,false),
+        new Route("GET","/api/v1/alerts",true,true),
+        new Route("GET","/api/v1/alerts/{id}",true,true),
+        new Route("PATCH","/api/v1/alerts/{id}/resolve",true,false),
+        new Route("GET","/api/v1/audit-logs",true,false),
+        new Route("GET","/api/v1/audit-logs/{id}",true,false),
+        new Route("POST","/api/v1/offers",true,false),
+        new Route("GET","/api/v1/offers",true,false),
+        new Route("GET","/api/v1/offers/{id}",true,false),
+        new Route("PUT","/api/v1/offers/{id}",true,false),
+        new Route("PATCH","/api/v1/offers/{id}/activate",true,false),
+        new Route("PATCH","/api/v1/offers/{id}/deactivate",true,false),
+        new Route("POST","/api/v1/recommendations/generate",true,false),
+        new Route("GET","/api/v1/recommendations",true,false),
+        new Route("GET","/api/v1/recommendations/{id}",true,false),
+        new Route("PATCH","/api/v1/recommendations/{id}/dismiss",true,false)
+    );
+}

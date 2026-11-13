@@ -34,4 +34,9 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
             @Param("lotId") Long lotId,
             @Param("resolved") Boolean resolved
     );
+
+    java.util.Optional<Alert> findByIdAndBusinessId(Long id, Long businessId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    java.util.Optional<Alert> findWithLockByIdAndBusinessId(Long id, Long businessId);
 }

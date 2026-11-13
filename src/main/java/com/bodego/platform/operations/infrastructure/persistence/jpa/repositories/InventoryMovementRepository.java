@@ -13,4 +13,8 @@ public interface InventoryMovementRepository
     List<InventoryMovement> findByBusinessId(Long businessId);
 
     List<InventoryMovement> findByLotId(Long lotId);
+
+    java.util.Optional<InventoryMovement> findByIdAndBusinessId(Long id, Long businessId);
+
+    java.util.List<InventoryMovement> findByLotIdAndBusinessId(Long lotId, Long businessId);
 }

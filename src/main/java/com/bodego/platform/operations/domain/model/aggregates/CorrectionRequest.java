@@ -1,6 +1,7 @@
 package com.bodego.platform.operations.domain.model.aggregates;
 
 import com.bodego.platform.operations.domain.model.valueobjects.CorrectionRequestStatus;
+import com.bodego.platform.operations.domain.exceptions.CorrectionRequestAlreadyReviewedException;
 import com.bodego.platform.shared.domain.model.aggregates.AuditableAbstractAggregateRoot;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -85,8 +86,7 @@ public class CorrectionRequest
 
     private void validatePending() {
         if (status != CorrectionRequestStatus.PENDING) {
-            throw new IllegalStateException(
-                    "Correction request has already been reviewed");
+            throw new CorrectionRequestAlreadyReviewedException();
         }
     }
 

@@ -29,8 +29,8 @@ class AuditLogServicesTests {
 
     private final AuditLogRepository repository = mock(
             AuditLogRepository.class, withSettings().mockMaker(MockMakers.PROXY));
-    private final AuditLogCommandServiceImpl commands = new AuditLogCommandServiceImpl(repository);
-    private final AuditLogQueryServiceImpl queries = new AuditLogQueryServiceImpl(repository);
+    private final AuditLogCommandServiceImpl commands = new AuditLogCommandServiceImpl(repository, com.bodego.platform.shared.application.security.TestBusinessAccess.admin());
+    private final AuditLogQueryServiceImpl queries = new AuditLogQueryServiceImpl(repository, com.bodego.platform.shared.application.security.TestBusinessAccess.admin());
     private final TestTransactionManager manager = new TestTransactionManager();
 
     private Object transactionalProxy(Object target) {
@@ -76,7 +76,7 @@ class AuditLogServicesTests {
         });
         assertEquals(1, manager.commits);
         assertEquals(0, manager.rollbacks);
-        verify(repository).save(argThat(log -> log.getUserId() == null
+        verify(repository).save(argThat(log -> log.getUserId().equals(99L)
                 && log.getBusinessId().equals(1L) && log.getEntityId().equals(2L)
                 && log.getAction().equals("CREATED") && log.getOccurredAt() != null));
     }
@@ -106,11 +106,11 @@ class AuditLogServicesTests {
     @Test
     void queriesPreserveCombinedFiltersAndMissingIds() {
         when(repository.findByFilters(1L, "Waste", 2L)).thenReturn(List.of());
-        when(repository.findById(9L)).thenReturn(Optional.empty());
+        when(repository.findByIdAndBusinessId(9L, 1L)).thenReturn(Optional.empty());
         assertTrue(queries.handle(new GetAuditLogsQuery(1L, " Waste ", 2L)).isEmpty());
         assertTrue(queries.handle(new GetAuditLogByIdQuery(9L)).isEmpty());
         verify(repository).findByFilters(1L, "Waste", 2L);
-        verify(repository).findById(9L);
+        verify(repository).findByIdAndBusinessId(9L, 1L);
     }
 
     @Test

@@ -36,4 +36,9 @@ public interface RecommendationRepository extends JpaRepository<Recommendation, 
             @Param("type") RecommendationType type,
             @Param("dismissed") Boolean dismissed
     );
+
+    java.util.Optional<Recommendation> findByIdAndBusinessId(Long id, Long businessId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    java.util.Optional<Recommendation> findWithLockByIdAndBusinessId(Long id, Long businessId);
 }
